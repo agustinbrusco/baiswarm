@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vote, toggleInterest, addComment, removeComment, addLink, removeLink, subscribe, norm } from "./storage.js";
 import { C, SERIF, SANS, FIELD, BORDER } from "./theme.js";
 import { PROFILE_HINTS, ProfileInput, AuthGate, Footer } from "./Auth.jsx";
+import Md, { MD_HINT } from "./Md.jsx";
 
 // ── Identidad ───────────────────────────────────────────────────────────────
 const NAME = "BAISWARM";
@@ -289,6 +290,7 @@ function PostFields({ kind, d, setD }) {
       {isProj && <input value={d.pitch} onChange={set("pitch")} placeholder="Una línea: por qué importa y qué entregable sale" className="px-3 py-2 rounded" style={FIELD} />}
       <textarea value={d.body} onChange={set("body")} rows={5}
         placeholder={isProj ? "Detalle: método, datos, qué se puede hacer en 3 días, qué perfiles hacen falta" : "Desarrollo: qué observaste, por qué importa, qué proyecto podría salir de acá"} className="px-3 py-2 rounded" style={FIELD} />
+      <span className="text-xs -mt-1" style={{ fontFamily: SANS, color: C.muted }}>{MD_HINT}</span>
       {!isProj && <input value={d.url} onChange={set("url")} placeholder="Link a la fuente (opcional)" className="px-3 py-2 rounded" style={{ ...FIELD, fontFamily: SANS, fontSize: 14 }} />}
       <div className="flex gap-2 items-center text-sm">
         <span style={{ color: C.muted }}>Track</span>
@@ -344,13 +346,17 @@ function EditPost({ post: p, onSave, onCancel }) {
   );
 }
 
+// Enter envía, Shift+Enter salta de línea (markdown). El textarea crece con el texto.
 function CommentBox({ placeholder, onSend, autoFocus }) {
   const [text, setText] = useState("");
-  const send = () => { if (text.trim()) { onSend(text.trim()); setText(""); } };
+  const ref = useRef(null);
+  const send = () => { if (text.trim()) { onSend(text.trim()); setText(""); if (ref.current) ref.current.style.height = ""; } };
+  const grow = (el) => { el.style.height = ""; el.style.height = `${el.scrollHeight}px`; };
   return (
-    <div className="flex gap-2 mt-2" style={{ fontFamily: SANS }}>
-      <input autoFocus={autoFocus} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className="flex-1 min-w-0 text-sm px-2 py-1 rounded bg-transparent" style={BORDER}
-        onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+    <div className="flex gap-2 mt-2 items-start" style={{ fontFamily: SANS }}>
+      <textarea ref={ref} rows={1} autoFocus={autoFocus} value={text} onChange={(e) => { setText(e.target.value); grow(e.target); }} placeholder={placeholder}
+        className="flex-1 min-w-0 text-sm px-2 py-1 rounded bg-transparent resize-none" style={{ ...BORDER, lineHeight: 1.4 }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} />
       <button onClick={send} className="text-sm px-3 py-1 rounded" style={BORDER}>Enviar</button>
     </div>
   );
@@ -390,7 +396,7 @@ function Comment({ c, depth, me, replying, onReply, onSend, onRemove }) {
         {!c.deleted && <button onClick={onReply} className="px-1 py-1 -my-1" style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
         {!c.deleted && c.uid === me.id && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-2 py-1 -my-1" style={{ fontSize: 14 }}>×</button>}
       </div>
-      <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 15, color: c.deleted ? C.muted : C.ink, fontStyle: c.deleted ? "italic" : "normal" }}>{c.deleted ? "comentario eliminado" : c.text}</p>
+      {c.deleted ? <p className="leading-relaxed" style={{ fontSize: 15, color: C.muted, fontStyle: "italic" }}>comentario eliminado</p> : <Md text={c.text} size={15} />}
       {replying && <CommentBox autoFocus placeholder={`Responder a ${c.who}…`} onSend={onSend} />}
     </div>
   );
@@ -448,7 +454,7 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
 
             {open && (
               <div className="mt-3">
-                <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 16 }}>{p.body}</p>
+                <Md text={p.body} size={16} />
 
                 {isProj && (
                   <div className="mt-4 p-3 rounded" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>

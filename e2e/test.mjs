@@ -104,7 +104,7 @@ try {
   await d.getByRole("button", { name: "Publicar", exact: true }).click();
   await d.getByPlaceholder(/Título: qué vamos/).fill("Harness de detección de escape en evals");
   await d.getByPlaceholder(/Una línea/).fill("Detectar cuándo un agente intenta salir del sandbox durante una eval.");
-  await d.getByPlaceholder(/Detalle:/).fill("Método: instrumentar red y filesystem del sandbox.\nPerfiles: infra, seguridad.");
+  await d.getByPlaceholder(/Detalle:/).fill("Método: instrumentar red y filesystem del sandbox.\nPerfiles: infra, seguridad.\n\n$$\n\\sum_{i=1}^{n} \\log p(x_i \\mid x_{<i}) + \\mathbb{E}_{x \\sim \\pi}[r(x)] - \\beta\\,\\mathrm{KL}(\\pi \\| \\pi_{\\mathrm{ref}})\n$$");
   await d.getByRole("button", { name: "Publicar proyecto" }).click();
   await must(heading(d, /Harness de detección/), "proyecto publicado");
   await must(d.getByText("1 interesado"), "autor anotado como interesado");
@@ -113,7 +113,7 @@ try {
   await d.getByRole("button", { name: "Publicar", exact: true }).click();
   await d.getByRole("button", { name: "Insight", exact: true }).click();
   await d.getByPlaceholder(/Título: la idea/).fill("Los agentes usaron Artifactory como message board");
-  await d.getByPlaceholder(/Desarrollo:/).fill("Cualquier store compartido escribible es un canal de coordinación.");
+  await d.getByPlaceholder(/Desarrollo:/).fill("Cualquier store **compartido** escribible es un canal de coordinación.\n- ver `artifactory`\n- [METR](https://example.com/metr) <b>html crudo</b>\n- cuesta $500 y $$E=mc^2$$");
   await d.getByPlaceholder(/Link a la fuente/).fill("https://example.com/metr");
   await d.locator("select").filter({ hasText: "vincular…" }).selectOption("informa");
   await d.locator("select").filter({ hasText: "proyecto…" }).selectOption({ index: 1 });
@@ -124,6 +124,14 @@ try {
   await must(d.getByText(/informa a #1/), "chip de vínculo en insight");
   await must(d.getByText("fuente"), "link a fuente");
   if (await d.getByText("sin proyecto todavía").count()) note("insight vinculado aparece como huérfano");
+  // markdown en el cuerpo (publicar deja el post abierto): negrita, lista, link, código, html crudo como texto, $ libre, fórmula entre $$
+  const body = d.locator(".md").first();
+  await must(body.locator("strong", { hasText: "compartido" }), "markdown: negrita");
+  await must(body.locator("li code", { hasText: "artifactory" }), "markdown: lista con código");
+  { const a = body.locator("a", { hasText: "METR" }); if ((await a.getAttribute("href")) === "https://example.com/metr" && (await a.getAttribute("target")) === "_blank") ok("markdown: link en pestaña nueva"); else note("markdown: link mal rendido"); }
+  if (await body.locator("b").count()) note("markdown: html crudo se rindió como html"); else await must(body.getByText("<b>html crudo</b>"), "markdown: html crudo como texto");
+  await must(body.getByText("cuesta $500 y"), "markdown: $ solo no abre fórmula");
+  await must(body.locator(".katex"), "markdown: fórmula con KaTeX");
   await shot(d, "03-desktop-insight");
 
   await d.getByRole("button", { name: /Proyectos/ }).click();
@@ -158,8 +166,10 @@ try {
   await d.getByPlaceholder("Comentar…").fill("¿Qué señales concretas miraríamos?"); await d.keyboard.press("Enter");
   await must(d.getByText("¿Qué señales concretas miraríamos?"), "comentario raíz");
   await d.getByRole("button", { name: "responder" }).first().click();
-  await d.getByPlaceholder(new RegExp(`Responder a ${A}`)).fill("Conexiones salientes inesperadas, para empezar."); await d.keyboard.press("Enter");
+  await d.getByPlaceholder(new RegExp(`Responder a ${A}`)).fill("Conexiones salientes inesperadas, **para empezar**."); await d.keyboard.press("Enter");
   await must(d.getByText("Conexiones salientes inesperadas"), "respuesta anidada");
+  await must(d.locator(".md strong", { hasText: "para empezar" }), "markdown en comentario");
+  await must(d.locator(".katex-display"), "fórmula display en el proyecto");
   await must(d.getByText("2 comentarios"), "conteo de comentarios");
   await shot(d, "04-desktop-comentarios");
 
