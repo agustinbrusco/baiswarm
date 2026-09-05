@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "backup": "node scripts/backup.mjs",
-    "e2e": "node e2e/test.mjs"
+    "e2e": "node e2e/test.mjs",
+    "check": "node scripts/check.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

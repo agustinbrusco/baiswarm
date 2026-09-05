@@ -1,17 +1,11 @@
 // Baja la tabla posts a backups/posts-<fecha>.json.
 // Con `--restore <archivo>` la vuelve a subir (upsert por id; no borra lo que haya de más).
 // Lee VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY de .env o del entorno.
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
+import { loadEnv } from "./env.mjs";
 
-const fromFile = existsSync(".env")
-  ? Object.fromEntries(readFileSync(".env", "utf8").split("\n")
-      .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
-      .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }))
-  : {};
-const env = { ...fromFile, ...process.env };
-const url = env.VITE_SUPABASE_URL, key = env.VITE_SUPABASE_ANON_KEY;
-if (!url || !key) { console.error("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (en .env o en el entorno)."); process.exit(1); }
+const { url, key } = loadEnv();
 const db = createClient(url, key);
 
 const [flag, file] = process.argv.slice(2);

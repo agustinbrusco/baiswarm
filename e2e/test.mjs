@@ -1,5 +1,7 @@
 // Recorrido end to end contra el modo demo (sin Supabase), en escritorio y en iPhone 14.
 // Uso: npm run e2e   (la primera vez: npx playwright install chromium)
+//      E2E_REAL=1 npm run e2e   corre contra el Supabase de .env en vez del modo demo. Escribe y borra posts
+//      de prueba, así que solo con la tabla vacía; verifica además que un navegador vea los cambios del otro.
 // Levanta el servidor de Vite en modo demo, recorre publicar, votar, comentar, editar, vincular,
 // equipos, sincronización entre pestañas y reporte; chequea overflow horizontal y contenedores
 // recortados; deja capturas en e2e/shots. Sale con código 1 si encontró problemas.
@@ -8,11 +10,12 @@ import { mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 
 const PORT = 5199, BASE = `http://127.0.0.1:${PORT}/`;
+const REAL = process.env.E2E_REAL === "1";
 const OUT = process.env.OUT || "e2e/shots"; mkdirSync(OUT, { recursive: true });
 
 // servidor de desarrollo en modo demo
 // Vite directo con node (no vía npx) para que server.kill() mate al proceso correcto.
-const server = spawn(process.execPath, ["node_modules/vite/bin/vite.js", "--mode", "demo", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { stdio: "ignore" });
+const server = spawn(process.execPath, ["node_modules/vite/bin/vite.js", ...(REAL ? [] : ["--mode", "demo"]), "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], { stdio: "ignore" });
 const up = async () => { for (let i = 0; i < 60; i++) { try { if ((await fetch(BASE)).ok) return true; } catch {} await new Promise((r) => setTimeout(r, 500)); } return false; };
 if (!(await up())) { console.error("El servidor no levantó en 30 s."); server.kill(); process.exit(2); }
 
@@ -58,7 +61,8 @@ try {
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   d = await dctx.newPage(); wire(d, "desktop");
   await d.goto(BASE);
-  await must(d.getByText("Modo demo"), "banner demo");
+  if (REAL) { if (await d.getByText("Modo demo").count()) note("apareció el banner de demo en modo real"); else ok("sin banner de demo"); }
+  else await must(d.getByText("Modo demo"), "banner demo");
   await noOverflow(d, "desktop entrada");
   await shot(d, "01-desktop-entrada");
   await enter(d, "agus", "Interpretabilidad");
@@ -134,7 +138,7 @@ try {
   await must(heading(d2, /\(v2\)/), "pestaña 2 ve los datos");
   await d.getByRole("button", { name: /Proyectos/ }).click();
   await d.getByPlaceholder("Comentar…").fill("prueba de sincronización"); await d.keyboard.press("Enter");
-  await must(d2.getByText("2 comentarios"), "pestaña 2 recibió el cambio sin recargar", 8000);
+  await must(d2.getByText("2 comentarios"), "pestaña 2 recibió el cambio sin recargar", REAL ? 15000 : 8000);
 
   // ── Reporte ──
   await d.getByRole("button", { name: "Reportar un problema" }).click();
@@ -147,7 +151,7 @@ try {
   // ── Celular (iPhone 14), con los mismos datos ──
   const seed = await d.evaluate(() => localStorage.getItem("baiswarm:demo"));
   const mctx = await browser.newContext({ ...devices["iPhone 14"] });
-  await mctx.addInitScript((v) => { if (!localStorage.getItem("baiswarm:demo")) localStorage.setItem("baiswarm:demo", v); }, seed);
+  if (!REAL) await mctx.addInitScript((v) => { if (!localStorage.getItem("baiswarm:demo")) localStorage.setItem("baiswarm:demo", v); }, seed);
   m = await mctx.newPage(); wire(m, "mobile");
   await m.goto(BASE);
   await noOverflow(m, "mobile entrada"); await shot(m, "07-mobile-entrada");
@@ -158,6 +162,7 @@ try {
   await m.getByRole("button", { name: "Me sumaría" }).click();
   await must(m.getByText(/eitan \(Policy/), "mobile: sumado con perfil");
   await must(m.getByText("2 interesados"), "conteo de interesados");
+  if (REAL) await must(d.getByText("2 interesados"), "el escritorio vio por realtime lo que hizo el celular", 15000);
   await noOverflow(m, "mobile proyecto abierto"); await shot(m, "08-mobile-proyecto");
   await m.getByRole("button", { name: "responder" }).first().click();
   await m.getByPlaceholder(/Responder a/).fill("Desde policy: qué obligaciones de reporte aplican."); await m.keyboard.press("Enter");

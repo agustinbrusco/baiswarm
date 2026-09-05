@@ -4,7 +4,7 @@
 BAISWARM: foro liviano de BAISH (Buenos Aires AI Safety Hub) para proponer proyectos, aportar insights, votar y formar equipos antes de un hackathon. Primer uso: AI Incident Response Sprint de Apart Research y CeSIA, 11–13 sep 2026, sobre el incidente OpenAI / Hugging Face de julio 2026.
 
 ## Estado
-Prototipo funcional migrado desde un artifact de Claude. Repo público en GitHub (agustinbrusco/baiswarm) con deploy a Pages por Actions; faltan las variables de Supabase en el repo. Falta correrlo contra un Supabase real por primera vez: si algo rompe, empezar por `src/storage.js` y `supabase/schema.sql`.
+Prototipo funcional. Repo público en GitHub (agustinbrusco/baiswarm) con deploy a Pages por Actions y variables de Supabase cargadas. Supabase real probado el 2026-09-05: lectura, escritura, realtime y recorrido e2e entre dos navegadores. `npm run check` diagnostica la conexión.
 
 Escala objetivo de esta versión: menos de 20 usuarios en una semana, no más de 5 en simultáneo. No optimizar para más que eso.
 
@@ -34,12 +34,11 @@ Perfil (`role`) es texto libre con sugerencias (`PROFILE_HINTS`, un datalist); n
 - Realtime de Supabase con debounce de 300 ms que recarga todo, más polling cada 60 s por si realtime no llega. Lectura y escritura en dos pasos (`mutate`); a esta escala no hace falta atomicidad.
 
 ## Pruebas
-`npm run e2e` (primera vez: `npx playwright install chromium`). Recorrido end to end en `e2e/test.mjs` contra el modo demo, en escritorio 1280px y iPhone 14: entrar, publicar proyecto e insight vinculados, votar, comentar y responder, editar, vincular, borrar, equipos, sincronización entre pestañas, reporte, y chequeo de overflow horizontal y de contenedores recortados. Levanta y apaga su propio servidor; deja capturas en `e2e/shots/` (ignorado por git). Correrlo antes de tocar layout y mirar las capturas: el script no ve padding ni tipografía. Al 2026-09-05 pasaba sin problemas.
+`npm run e2e` (primera vez: `npx playwright install chromium`); con `E2E_REAL=1` corre contra el Supabase de `.env`, solo con la tabla vacía, y verifica realtime entre dos navegadores. Recorrido end to end en `e2e/test.mjs` contra el modo demo, en escritorio 1280px y iPhone 14: entrar, publicar proyecto e insight vinculados, votar, comentar y responder, editar, vincular, borrar, equipos, sincronización entre pestañas, reporte, y chequeo de overflow horizontal y de contenedores recortados. Levanta y apaga su propio servidor; deja capturas en `e2e/shots/` (ignorado por git). Correrlo antes de tocar layout y mirar las capturas: el script no ve padding ni tipografía. Al 2026-09-05 pasaba sin problemas.
 
 Reporte de problemas: botón al pie que abre un issue en GitHub prellenado con usuario, pestaña, versión (`VITE_COMMIT`, el sha del build), pantalla y navegador; o copia el texto para mandarlo por Discord.
 
 ## Pendientes sugeridos, en orden
-1. Correr end to end con Supabase y dos navegadores.
-2. Fecha de cierre de equipos, configurable, con estado "cerrado" en proyectos.
-3. Paleta de BAISH.
-4. Auth con magic link + whitelist cuando haya SMTP.
+1. Fecha de cierre de equipos, configurable, con estado "cerrado" en proyectos.
+2. Paleta de BAISH.
+3. Auth con magic link + whitelist cuando haya SMTP.

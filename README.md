@@ -19,7 +19,8 @@ Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días;
    npm install
    npm run dev
    ```
-4. **Probar con dos navegadores** (o dos personas): publicá un post en uno y confirmá que aparece en el otro sin recargar.
+4. **Chequear la conexión:** `npm run check` verifica variables, tabla, permisos de lectura y escritura, y realtime.
+5. **Probar con dos navegadores** (o dos personas): publicá un post en uno y confirmá que aparece en el otro sin recargar. Automatizado: `E2E_REAL=1 npm run e2e`, solo con la tabla vacía porque escribe y borra posts de prueba.
 
 ## Probar sin Supabase
 
@@ -34,6 +35,8 @@ Modo demo: mismos flujos, pero los datos quedan en localStorage y se sincronizan
 ```bash
 npx playwright install chromium   # una sola vez
 npm run e2e                       # recorrido completo en escritorio y celular, con capturas en e2e/shots
+E2E_REAL=1 npm run e2e            # lo mismo contra el Supabase de .env, con chequeo de realtime entre navegadores
+npm run check                     # conexión, permisos y realtime del Supabase configurado
 ```
 
 ## Reportar problemas
@@ -64,6 +67,8 @@ src/App.jsx          UI completa (feed, equipos, formulario, edición)
 src/storage.js       capa de datos: todo lo que habla con Supabase y localStorage
 supabase/schema.sql  tabla, policies y realtime; se puede correr más de una vez
 scripts/backup.mjs   backup y restore de la tabla desde la terminal
+scripts/check.mjs    chequeo de conexión, permisos y realtime
+e2e/test.mjs         recorrido automatizado con Playwright
 ```
 
 `storage.js` expone `loadAll`, `savePost`, `mutate`, `deletePost`, `subscribe`. `mutate(id, fn)` relee el post antes de escribir para no pisar cambios ajenos; con jsonb en una sola fila alcanza para decenas de personas, no para cientos concurrentes. Además de realtime hay un polling cada 60 segundos como red de seguridad.
