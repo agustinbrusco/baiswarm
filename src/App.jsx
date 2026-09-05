@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { configured, loadAll, savePost, mutate, deletePost, subscribe, norm, loadProfile, saveProfile as persistProfile, clearProfile } from "./storage.js";
+import { configured, demo, loadAll, savePost, mutate, deletePost, subscribe, norm, loadProfile, saveProfile as persistProfile, clearProfile } from "./storage.js";
 
 // ── Identidad ───────────────────────────────────────────────────────────────
 const NAME = "BAISWARM";
 const TAGLINE = "Buenos Aires Safety War Room";
 const SPRINT = "2026-09-11T00:00:00-03:00"; // hora de Buenos Aires
 const SPRINT_URL = "https://apartresearch.com/sprints/ai-incident-response-sprint-2026-09-11-to-2026-09-13";
+const REPO = "https://github.com/agustinbrusco/baiswarm";
+const COMMIT = (import.meta.env.VITE_COMMIT || "dev").slice(0, 7);
 
 // ── Paleta y tipografía (cambiá acá para matchear la web de BAISH) ──────────
 const C = {
@@ -141,20 +143,20 @@ export default function App() {
         <header className="pt-6 pb-4" style={{ borderBottom: `1px solid ${C.line}` }}>
           <div className="flex items-baseline justify-between gap-3" style={{ fontFamily: SANS }}>
             <span className="text-sm" style={{ color: C.muted }}>{TAGLINE}</span>
-            <span className="text-sm flex items-center gap-2" style={{ color: C.muted }}>
-              <a href={SPRINT_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>
-                {days > 0 ? `El sprint arranca en ${days} ${days === 1 ? "día" : "días"}` : "Sprint en curso"}
+            <span className="text-sm flex items-center gap-2 shrink-0" style={{ color: C.muted }}>
+              <a href={SPRINT_URL} target="_blank" rel="noreferrer" className="whitespace-nowrap" style={{ textDecoration: "underline" }}>
+                {days > 0 ? `Sprint en ${days} ${days === 1 ? "día" : "días"}` : "Sprint en curso"}
               </a>
-              <button onClick={refresh} title="Actualizar" aria-label="Actualizar" className="px-1" style={{ color: C.muted }}>↻</button>
+              <button onClick={refresh} title="Actualizar" aria-label="Actualizar" className="px-2 py-1 -my-1" style={{ color: C.muted }}>↻</button>
             </span>
           </div>
           <h1 className="text-3xl mt-1 leading-tight" style={{ fontWeight: 600, letterSpacing: "-0.01em", color: C.accent }}>{NAME}</h1>
           <p className="mt-2 text-base leading-relaxed" style={{ color: C.muted }}>
             Nuestro message board para el <a href={SPRINT_URL} target="_blank" rel="noreferrer" style={{ textDecoration: "underline" }}>AI Incident Response Sprint</a> de Apart y CeSIA. Los proyectos son lo que vamos a construir; los insights son lo que sabemos, sospechamos o leímos y que debería informarlos.
           </p>
-          <nav className="flex gap-1 mt-4 -mb-px items-center overflow-x-auto" style={{ fontFamily: SANS }}>
+          <nav className="flex justify-between sm:justify-start sm:gap-1 mt-4 -mb-px items-center overflow-x-auto" style={{ fontFamily: SANS }}>
             {[["proyecto", `Proyectos (${nProj})`], ["insight", `Insights (${nIns})`], ["equipos", "Equipos"], ["nuevo", "Publicar"]].map(([k, l]) => (
-              <button key={k} onClick={() => setTab(k)} className="px-3 py-2 text-sm whitespace-nowrap"
+              <button key={k} onClick={() => setTab(k)} className="px-1.5 sm:px-3 py-2 text-sm whitespace-nowrap"
                 style={{ borderBottom: `2px solid ${tab === k ? (k === "insight" ? C.insight : C.accent) : "transparent"}`, color: tab === k ? (k === "insight" ? C.insight : C.accent) : C.muted, fontWeight: tab === k ? 600 : 400 }}>{l}</button>
             ))}
           </nav>
@@ -163,6 +165,11 @@ export default function App() {
         {!configured && (
           <div className="mt-6 p-4 rounded text-sm leading-relaxed" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
             Falta configurar Supabase. Copiá <code>.env.example</code> a <code>.env</code>, completá la URL y la anon key del proyecto, y reiniciá el servidor. Los pasos completos están en el README.
+          </div>
+        )}
+        {demo && (
+          <div className="mt-3 text-xs px-3 py-2 rounded" style={{ fontFamily: SANS, background: C.insightSoft, color: C.insight }}>
+            Modo demo: los datos quedan en este navegador y se comparten entre sus pestañas. Nada llega al grupo.
           </div>
         )}
         {configured && !me && <NameGate onSave={saveProfile} />}
@@ -176,7 +183,7 @@ export default function App() {
               </select>
               <span className="ml-auto flex gap-3" style={{ color: C.muted }}>
                 {[["score", "Más votados"], ["new", "Recientes"]].map(([k, l]) => (
-                  <button key={k} onClick={() => setSort(k)} style={{ color: sort === k ? C.ink : C.muted, textDecoration: sort === k ? "underline" : "none" }}>{l}</button>
+                  <button key={k} onClick={() => setSort(k)} className="py-1" style={{ color: sort === k ? C.ink : C.muted, textDecoration: sort === k ? "underline" : "none" }}>{l}</button>
                 ))}
               </span>
             </div>
@@ -202,10 +209,45 @@ export default function App() {
 
         {me && (
           <p className="mt-10 text-xs leading-relaxed" style={{ fontFamily: SANS, color: C.muted }}>
-            Participás como <b>{me.name}</b> · {me.role} · <button onClick={changeProfile} style={{ textDecoration: "underline" }}>cambiar</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
+            Participás como <b>{me.name}</b> · {me.role} · <button onClick={changeProfile} className="py-1" style={{ textDecoration: "underline" }}>cambiar</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
           </p>
         )}
+        <Report me={me} tab={tab} err={err} />
       </div>
+    </div>
+  );
+}
+
+// Reportar un problema: abre un issue en GitHub con diagnóstico adjunto, o copia el texto para mandarlo por otro lado.
+function Report({ me, tab, err }) {
+  const [show, setShow] = useState(false);
+  const [text, setText] = useState("");
+  const [copied, setCopied] = useState(false);
+  const body = () => [
+    text.trim() || "(sin descripción)", "", "---",
+    `Usuario: ${me?.name || "sin entrar"}`, `Pestaña: ${tab}`, `Versión: ${COMMIT}`,
+    `Pantalla: ${window.innerWidth}×${window.innerHeight}`, `Navegador: ${navigator.userAgent}`,
+    err ? `Último error: ${err}` : null,
+  ].filter((l) => l !== null).join("\n");
+  const title = text.trim().split("\n")[0].slice(0, 60) || "Problema en BAISWARM";
+  const issueUrl = `${REPO}/issues/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body())}`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(body()); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    catch { window.prompt("Copiá este texto:", body()); }
+  };
+  return (
+    <div className="mt-6 text-xs" style={{ fontFamily: SANS, color: C.muted }}>
+      <button onClick={() => setShow(!show)} className="py-1" style={{ textDecoration: "underline" }}>{show ? "Cerrar reporte" : "Reportar un problema"}</button>
+      {show && (
+        <div className="mt-2 p-3 rounded flex flex-col gap-2" style={{ background: C.card, ...BORDER }}>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Qué pasó, qué esperabas y qué estabas haciendo" className="px-2 py-1 rounded text-sm" style={{ ...BORDER, fontFamily: SANS, color: C.ink }} />
+          <div className="flex flex-wrap gap-2 items-center">
+            <a href={issueUrl} target="_blank" rel="noreferrer" className="px-3 py-1 rounded" style={{ background: C.accent, color: "#fff" }}>Abrir issue en GitHub</a>
+            <button onClick={copy} className="px-3 py-1 rounded" style={BORDER}>{copied ? "Copiado" : "Copiar para mandar por Discord"}</button>
+          </div>
+          <span>Se adjuntan navegador, tamaño de pantalla y versión. Si no tenés cuenta de GitHub, copialo y mandalo al grupo.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,7 +281,7 @@ function Chip({ color, soft, onClick, onRemove, children }) {
   return (
     <span className="inline-flex items-center rounded-full text-xs" style={{ background: soft, color }}>
       <button onClick={onClick} disabled={!onClick} className="px-2 py-0.5 text-left">{children}</button>
-      {onRemove && <button aria-label="Quitar vínculo" title="Quitar vínculo" onClick={onRemove} className="pr-2 py-0.5 leading-none">×</button>}
+      {onRemove && <button aria-label="Quitar vínculo" title="Quitar vínculo" onClick={onRemove} className="pl-1 pr-2 py-0.5 leading-none" style={{ fontSize: 14 }}>×</button>}
     </span>
   );
 }
@@ -352,8 +394,8 @@ function Comment({ c, depth, me, replying, onReply, onSend, onRemove }) {
       <div className="flex gap-2 text-xs" style={{ fontFamily: SANS, color: C.muted }}>
         {!c.deleted && <span style={{ color: C.ink }}>{c.who}</span>}
         <span>{when(c.t)}</span>
-        {!c.deleted && <button onClick={onReply} style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
-        {!c.deleted && c.who === me.name && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-1">×</button>}
+        {!c.deleted && <button onClick={onReply} className="px-1 py-1 -my-1" style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
+        {!c.deleted && c.who === me.name && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-2 py-1 -my-1" style={{ fontSize: 14 }}>×</button>}
       </div>
       <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 15, color: c.deleted ? C.muted : C.ink, fontStyle: c.deleted ? "italic" : "normal" }}>{c.deleted ? "comentario eliminado" : c.text}</p>
       {replying && <CommentBox autoFocus placeholder={`Responder a ${c.who}…`} onSend={onSend} />}
@@ -377,9 +419,9 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
   return (
     <li id={`post-${p.id}`} className="flex gap-3 py-4" style={{ borderBottom: `1px solid ${C.line}`, scrollMarginTop: 8 }}>
       <div className="flex flex-col items-center pt-1 select-none" style={{ fontFamily: SANS, width: 34 }}>
-        <button aria-label="Votar a favor" onClick={() => act.vote(p.id, 1)} className="text-lg leading-none" style={{ color: my === 1 ? C.up : C.muted }}>▲</button>
-        <span className="text-sm font-semibold my-1" style={{ color: s < 0 ? C.down : C.ink }}>{s}</span>
-        <button aria-label="Votar en contra" onClick={() => act.vote(p.id, -1)} className="text-lg leading-none" style={{ color: my === -1 ? C.down : C.muted }}>▼</button>
+        <button aria-label="Votar a favor" onClick={() => act.vote(p.id, 1)} className="text-lg leading-none px-2 py-1" style={{ color: my === 1 ? C.up : C.muted }}>▲</button>
+        <span className="text-sm font-semibold" style={{ color: s < 0 ? C.down : C.ink }}>{s}</span>
+        <button aria-label="Votar en contra" onClick={() => act.vote(p.id, -1)} className="text-lg leading-none px-2 py-1" style={{ color: my === -1 ? C.down : C.muted }}>▼</button>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -429,10 +471,10 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
 
                 <Comments post={p} me={me} act={act} />
 
-                <div className="flex gap-3 mt-4 text-xs" style={{ color: C.muted }}>
-                  <button onClick={() => setLinking(!linking)} style={link}>{linking ? "Cerrar" : "Vincular"}</button>
-                  {own && <button onClick={() => setEditing(true)} style={link}>Editar</button>}
-                  {own && <button onClick={() => { if (window.confirm("¿Eliminar este post para todos?")) act.remove(p.id); }} style={{ ...link, color: C.down }}>Eliminar</button>}
+                <div className="flex gap-2 mt-3 text-xs" style={{ color: C.muted }}>
+                  <button onClick={() => setLinking(!linking)} className="px-1 py-1" style={link}>{linking ? "Cerrar" : "Vincular"}</button>
+                  {own && <button onClick={() => setEditing(true)} className="px-1 py-1" style={link}>Editar</button>}
+                  {own && <button onClick={() => { if (window.confirm("¿Eliminar este post para todos?")) act.remove(p.id); }} className="px-1 py-1" style={{ ...link, color: C.down }}>Eliminar</button>}
                 </div>
                 {linking && (
                   <div className="mt-2">

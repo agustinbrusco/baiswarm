@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "demo": "vite --mode demo",
     "build": "vite build",
     "preview": "vite preview",
     "backup": "node scripts/backup.mjs"

@@ -21,6 +21,18 @@ Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días;
    ```
 4. **Probar con dos navegadores** (o dos personas): publicá un post en uno y confirmá que aparece en el otro sin recargar.
 
+## Probar sin Supabase
+
+```bash
+npm run demo
+```
+
+Modo demo: mismos flujos, pero los datos quedan en localStorage y se sincronizan entre pestañas del mismo navegador. Útil para ver la UI o probar cambios sin tocar la base.
+
+## Reportar problemas
+
+Al pie de la página hay "Reportar un problema": abre un issue en GitHub con la descripción y un diagnóstico (usuario, pestaña, versión, pantalla, navegador), o copia el texto para mandarlo por Discord.
+
 ## Deploy
 
 **GitHub Pages (recomendado, ya configurado).** Subí el repo, en *Settings → Pages* elegí *Source: GitHub Actions*, y en *Settings → Secrets and variables → Actions → Variables* creá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Cada push a `main` publica en `https://<usuario>.github.io/<repo>/`. Ojo: en el plan Free de GitHub, Pages solo funciona con repos públicos. El código no tiene secretos (la anon key es pública por diseño), así que hacerlo público no expone nada que el sitio no exponga ya.

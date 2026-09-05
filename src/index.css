@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-html, body, #root { margin: 0; min-height: 100%; }
-button { cursor: pointer; background: none; border: none; padding: 0; font: inherit; color: inherit; }
-button:disabled { cursor: default; }
-:focus-visible { outline: 2px solid #125D8C; outline-offset: 2px; }
+/* Dentro de @layer base para que las utilidades de Tailwind (px-4, py-2…) le ganen al reset. */
+@layer base {
+  html, body, #root { margin: 0; min-height: 100%; }
+  button { cursor: pointer; background: none; border: none; padding: 0; font: inherit; color: inherit; }
+  button:disabled { cursor: default; }
+  :focus-visible { outline: 2px solid #125D8C; outline-offset: 2px; }
+}
