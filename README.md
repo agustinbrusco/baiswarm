@@ -2,7 +2,7 @@
 
 Buenos Aires Safety War Room. Message board de BAISH para organizar proyectos y equipos de cara a hackathons; el primero es el AI Incident Response Sprint de Apart y CeSIA (11–13 de septiembre de 2026).
 
-Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días; tienen "me sumaría" con perfil y aparecen en Equipos) e **insights** (observaciones, hipótesis, lecturas; informan proyectos, no forman equipo). Votos, comentarios y vínculos tipados entre posts.
+Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días; tienen "me sumaría" con perfil y aparecen en Equipos) e **insights** (observaciones, hipótesis, lecturas; informan proyectos, no forman equipo). Votos, comentarios y vínculos tipados entre posts. Los vínculos se ven desde los dos lados y cualquiera puede agregarlos o quitarlos desde un post abierto; el texto lo edita solo su autor.
 
 ## Stack
 
@@ -23,21 +23,31 @@ Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días;
 
 ## Deploy
 
-**GitHub Pages (recomendado, ya configurado).** Subí el repo, en *Settings → Pages* elegí *Source: GitHub Actions*, y en *Settings → Secrets and variables → Actions → Variables* creá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Cada push a `main` publica en `https://<usuario>.github.io/<repo>/`.
+**GitHub Pages (recomendado, ya configurado).** Subí el repo, en *Settings → Pages* elegí *Source: GitHub Actions*, y en *Settings → Secrets and variables → Actions → Variables* creá `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`. Cada push a `main` publica en `https://<usuario>.github.io/<repo>/`. Ojo: en el plan Free de GitHub, Pages solo funciona con repos públicos. El código no tiene secretos (la anon key es pública por diseño), así que hacerlo público no expone nada que el sitio no exponga ya.
 
 **Netlify o Vercel.** Importá el repo, build command `npm run build`, publish directory `dist`, y cargá las dos variables de entorno. No hace falta `VITE_BASE`.
 
 La anon key es pública por diseño; lo que protege los datos son las policies de la tabla. Hoy son abiertas (cualquiera con el link lee y escribe), lo cual es aceptable para un grupo chico con link privado. Ver "Próximos pasos" para cerrarlo en serio.
 
+## Backup
+
+```bash
+npm run backup                                    # guarda la tabla en backups/posts-<fecha>.json
+npm run backup -- --restore backups/posts-X.json  # vuelve a subir ese archivo (upsert por id)
+```
+
+Usa las variables de `.env`. Conviene correrlo una vez al día mientras el foro esté activo: con las policies abiertas, cualquiera con la URL puede borrar posts.
+
 ## Estructura
 
 ```
-src/App.jsx        UI completa (feed, equipos, formulario)
-src/storage.js     capa de datos: todo lo que habla con Supabase y localStorage
-supabase/schema.sql tabla, policies y realtime
+src/App.jsx          UI completa (feed, equipos, formulario, edición)
+src/storage.js       capa de datos: todo lo que habla con Supabase y localStorage
+supabase/schema.sql  tabla, policies y realtime; se puede correr más de una vez
+scripts/backup.mjs   backup y restore de la tabla desde la terminal
 ```
 
-`storage.js` expone `loadAll`, `savePost`, `mutate`, `deletePost`, `subscribe`. `mutate(id, fn)` relee el post antes de escribir para no pisar cambios ajenos; con jsonb en una sola fila alcanza para decenas de personas, no para cientos concurrentes.
+`storage.js` expone `loadAll`, `savePost`, `mutate`, `deletePost`, `subscribe`. `mutate(id, fn)` relee el post antes de escribir para no pisar cambios ajenos; con jsonb en una sola fila alcanza para decenas de personas, no para cientos concurrentes. Además de realtime hay un polling cada 60 segundos como red de seguridad.
 
 ## Próximos pasos posibles
 

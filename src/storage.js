@@ -48,3 +48,4 @@ export function subscribe(onChange) {
 const PROFILE = "baiswarm:profile";
 export const loadProfile = () => { try { return JSON.parse(localStorage.getItem(PROFILE)); } catch { return null; } };
 export const saveProfile = (p) => localStorage.setItem(PROFILE, JSON.stringify(p));
+export const clearProfile = () => localStorage.removeItem(PROFILE);
