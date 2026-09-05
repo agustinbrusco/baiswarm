@@ -130,6 +130,22 @@ try {
   await must(d.getByText("se apoya en 1 insight"), "conteo recíproco en proyecto");
   await must(d.getByText(/se apoya en #2/), "chip recíproco en proyecto");
 
+  // ── Búsqueda: por pestaña, sin acentos ni mayúsculas, con salto a la otra pestaña ──
+  await d.getByRole("button", { name: "Buscar", exact: true }).click();
+  await d.getByPlaceholder("Buscar…").fill("artifactory");
+  await must(d.getByText("Nada con «artifactory» en proyectos."), "búsqueda: vacío en la pestaña activa");
+  await d.getByRole("button", { name: "1 insight", exact: true }).click();
+  await must(heading(d, /Artifactory/), "búsqueda: salto a la otra pestaña con el resultado");
+  await d.getByPlaceholder("Buscar…").fill("deteccion");
+  await must(d.getByText("Nada con «deteccion» en insights."), "búsqueda: insights sin resultado");
+  await d.getByRole("button", { name: "1 proyecto", exact: true }).click();
+  await must(heading(d, /Harness de detección/), "búsqueda: ignora acentos");
+  if (await heading(d, /Artifactory/).count()) note("búsqueda muestra un post de otra pestaña");
+  await shot(d, "03b-desktop-busqueda");
+  await d.getByRole("button", { name: "Cerrar búsqueda" }).click();
+  if (await d.getByPlaceholder("Buscar…").count()) note("la búsqueda no se cerró");
+  else ok("búsqueda cerrada");
+
   await d.getByRole("button", { name: /Insights/ }).click();
   await d.getByRole("button", { name: "Votar en contra" }).first().click();
   await must(d.locator("li").first().locator("span.font-semibold", { hasText: "-1" }), "voto negativo aplicado");
@@ -203,6 +219,10 @@ try {
   await noOverflow(m, "mobile comentarios");
   await smallTargets(m, "mobile proyecto abierto");
   await m.getByRole("button", { name: /Insights/ }).click(); await noOverflow(m, "mobile insights"); await shot(m, "09-mobile-insights");
+  await m.getByRole("button", { name: "Buscar", exact: true }).click(); await m.getByPlaceholder("Buscar…").fill("artifactory");
+  await must(m.getByText("1 insight · 0 proyectos"), "mobile: búsqueda con conteos");
+  await noOverflow(m, "mobile búsqueda"); await shot(m, "09b-mobile-busqueda");
+  await m.getByRole("button", { name: "Cerrar búsqueda" }).click();
   await m.getByRole("button", { name: "Equipos" }).click(); await noOverflow(m, "mobile equipos");
   await must(m.getByText(/Falta gente \(2\/3\)/), "equipos actualizado en mobile"); await shot(m, "10-mobile-equipos");
   await m.getByRole("button", { name: "Publicar", exact: true }).click(); await noOverflow(m, "mobile publicar");

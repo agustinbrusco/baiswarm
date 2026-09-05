@@ -28,6 +28,9 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const when = (t) => new Date(t).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const alive = (p) => p.comments.filter((c) => !c.deleted).length;
+const fold = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); // sin acentos ni mayúsculas, para buscar
+const PLURAL = { proyecto: ["proyecto", "proyectos"], insight: ["insight", "insights"] };
+const count = (n, kind) => `${n} ${PLURAL[kind][n === 1 ? 0 : 1]}`;
 
 export default function App() {
   const [me, setMe] = useState(null);           // { id, name, role } con sesión; null sin sesión
@@ -38,6 +41,8 @@ export default function App() {
   const [tab, setTab] = useState("proyecto");
   const [sort, setSort] = useState("score");
   const [track, setTrack] = useState("Todos");
+  const [q, setQ] = useState("");                 // texto de búsqueda; filtra la pestaña activa
+  const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(null);
   const busy = useRef(false), again = useRef(false), scrollTo = useRef(null);
 
@@ -117,13 +122,21 @@ export default function App() {
     .map(([id, rs]) => [id, rs.filter((r) => r.label === "se apoya en").map((r) => r.id)])), [rels, byId]);
   const linkedInsights = useMemo(() => new Set(Object.values(supports).flat()), [supports]);
 
+  // búsqueda: ids que contienen el texto en título, pitch, cuerpo, autor o url; null si no se está buscando
+  const hits = useMemo(() => {
+    const k = fold(q.trim());
+    return k ? new Set(posts.filter((p) => [p.title, p.pitch, p.body, p.author, p.url].some((f) => fold(f).includes(k))).map((p) => p.id)) : null;
+  }, [posts, q]);
+  const hitsOf = (kind) => (hits ? posts.filter((p) => p.kind === kind && hits.has(p.id)).length : 0);
   const shown = useMemo(() => {
-    const f = posts.filter((p) => p.kind === tab && (track === "Todos" || p.track === track));
+    const f = posts.filter((p) => p.kind === tab && (track === "Todos" || p.track === track) && (!hits || hits.has(p.id)));
     return sort === "score" ? [...f].sort((a, b) => score(b) - score(a) || b.t - a.t) : [...f].sort((a, b) => b.t - a.t);
-  }, [posts, tab, sort, track]);
+  }, [posts, tab, sort, track, hits]);
   const nProj = posts.filter((p) => p.kind === "proyecto").length, nIns = posts.length - nProj;
   const days = daysTo(SPRINT);
   const isFeed = tab === "proyecto" || tab === "insight";
+  const other = tab === "proyecto" ? "insight" : "proyecto";
+  const closeSearch = () => { setQ(""); setSearching(false); };
 
   return (
     <div style={{ background: C.paper, color: C.ink, minHeight: "100vh", fontFamily: SERIF }}>
@@ -171,14 +184,32 @@ export default function App() {
               <select value={track} onChange={(e) => setTrack(e.target.value)} className="px-2 py-1 rounded bg-transparent" style={{ ...BORDER, color: C.ink }}>
                 {["Todos", ...TRACKS].map((t) => <option key={t}>{t}</option>)}
               </select>
+              <button onClick={() => (searching ? closeSearch() : setSearching(true))} aria-label="Buscar" title="Buscar" className="px-2 py-1 rounded flex items-center" style={{ color: searching ? C.ink : C.muted }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.6-3.6" /></svg>
+              </button>
               <span className="ml-auto flex gap-3" style={{ color: C.muted }}>
                 {[["score", "Más votados"], ["new", "Recientes"]].map(([k, l]) => (
                   <button key={k} onClick={() => setSort(k)} className="py-1" style={{ color: sort === k ? C.ink : C.muted, textDecoration: sort === k ? "underline" : "none" }}>{l}</button>
                 ))}
               </span>
+              {searching && (
+                <div className="basis-full flex items-center gap-2">
+                  <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Escape" && closeSearch()}
+                    placeholder="Buscar…" aria-label="Buscar" className="flex-1 min-w-0 px-3 py-2 rounded" style={FIELD} />
+                  <button onClick={closeSearch} aria-label="Cerrar búsqueda" title="Cerrar búsqueda" className="px-2 py-1" style={{ color: C.muted, fontSize: 18 }}>×</button>
+                </div>
+              )}
+              {hits && (
+                <p className="basis-full text-xs" style={{ color: C.muted }}>
+                  {count(hitsOf(tab), tab)} · <button onClick={() => setTab(other)} className="py-1" style={{ textDecoration: "underline" }}>{count(hitsOf(other), other)}</button>
+                </p>
+              )}
             </div>
             {loading && <p className="py-6 text-sm" style={{ fontFamily: SANS, color: C.muted }}>Cargando…</p>}
-            {!loading && shown.length === 0 && (
+            {!loading && shown.length === 0 && hits && (
+              <p className="py-10 text-center" style={{ color: C.muted }}>Nada con «{q.trim()}» en {PLURAL[tab][1]}.</p>
+            )}
+            {!loading && shown.length === 0 && !hits && (
               <div className="py-10 text-center">
                 <p className="text-lg">{tab === "proyecto" ? "Todavía no hay proyectos." : "Todavía no hay insights."}</p>
                 <p className="mt-1 text-sm" style={{ color: C.muted }}>{tab === "proyecto" ? "Un proyecto es algo que un equipo puede entregar en tres días." : "Una observación, hipótesis, pregunta o lectura que debería informar algún proyecto."}</p>
