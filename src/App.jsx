@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { configured, demo, loadAll, savePost, mutate, deletePost, subscribe, norm, loadProfile, saveProfile as persistProfile, clearProfile } from "./storage.js";
+import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vote, toggleInterest, addComment, removeComment, addLink, removeLink, subscribe, norm } from "./storage.js";
+import { C, SERIF, SANS, FIELD, BORDER } from "./theme.js";
+import { PROFILE_HINTS, ProfileInput, AuthGate, Footer } from "./Auth.jsx";
 
 // ── Identidad ───────────────────────────────────────────────────────────────
 const NAME = "BAISWARM";
@@ -9,20 +11,6 @@ const SPRINT_URL = "https://apartresearch.com/sprints/ai-incident-response-sprin
 const REPO = "https://github.com/agustinbrusco/baiswarm";
 const COMMIT = (import.meta.env.VITE_COMMIT || "dev").slice(0, 7);
 
-// ── Paleta y tipografía (cambiá acá para matchear la web de BAISH) ──────────
-const C = {
-  paper: "#F7F7F4", card: "#FFFFFF", ink: "#1B2230", muted: "#66707F", line: "#E1E3E6",
-  accent: "#125D8C", accentSoft: "#E4EEF5",       // proyectos
-  insight: "#7A5C1E", insightSoft: "#F5EEDC",     // insights
-  up: "#3F7D4F", down: "#A8503F", warn: "#B7791F",
-};
-const SERIF = "'Iowan Old Style','Palatino Linotype','Charter',Georgia,serif";
-const SANS = "-apple-system,'Inter','Segoe UI',Roboto,sans-serif";
-const FIELD = { border: `1px solid ${C.line}`, background: C.card, width: "100%", fontFamily: SERIF, fontSize: 16 };
-const BORDER = { border: `1px solid ${C.line}` };
-
-// Sugerencias de perfil. El campo es libre: sirven para autocompletar, no para encasillar.
-const PROFILE_HINTS = ["Interpretabilidad", "ML / entrenamiento", "Seguridad informática", "Infra / DevOps", "Policy / regulación", "Forecasting", "Derecho", "Economía", "Escritura / comunicación", "Diseño / producto", "Organización / coordinación"];
 const TRACKS = ["Contención", "Detección", "Forecasting", "Regulación", "Tabletop", "General"];
 const KINDS = { proyecto: "Proyecto", insight: "Insight" };
 // vínculos permitidos según tipo de origen → tipo de destino. `inv` es cómo se lee el mismo vínculo desde el destino.
@@ -42,7 +30,8 @@ const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const alive = (p) => p.comments.filter((c) => !c.deleted).length;
 
 export default function App() {
-  const [me, setMe] = useState(() => loadProfile());
+  const [me, setMe] = useState(null);           // { id, name, role } con sesión; null sin sesión
+  const [authReady, setAuthReady] = useState(false);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -60,14 +49,23 @@ export default function App() {
     finally { busy.current = false; setLoading(false); if (again.current) { again.current = false; refresh(); } }
   }, []);
 
+  // sesión: la actual al arrancar, y cambios (login en otra pestaña, expiración)
   useEffect(() => {
     if (!configured) { setLoading(false); return; }
+    auth.current().then((m) => { setMe(m); setAuthReady(true); });
+    return auth.onChange(setMe);
+  }, []);
+
+  // datos: solo con sesión (RLS), y realtime también, porque respeta RLS
+  useEffect(() => {
+    if (!me) { setPosts([]); return; }
+    setLoading(true);
     refresh();
     let t = null;
     const unsub = subscribe(() => { clearTimeout(t); t = setTimeout(refresh, 300); });
     const poll = setInterval(refresh, 60000); // red de seguridad si realtime no llega
     return () => { clearTimeout(t); clearInterval(poll); unsub(); };
-  }, [refresh]);
+  }, [me?.id, refresh]);
 
   // después de saltar a un post, scrollear hasta él cuando esté renderizado
   useEffect(() => {
@@ -78,35 +76,26 @@ export default function App() {
 
   const apply = (u) => setPosts((xs) => xs.map((p) => (p.id === u.id ? u : p)));
   const run = async (pr) => { try { await pr; setErr(""); return true; } catch (e) { setErr(e.message || "Algo falló, actualizá y probá de nuevo."); refresh(); return false; } };
-  const change = (id, fn) => run(mutate(id, fn).then(apply));
 
+  // Todas las mutaciones van a la base con la identidad de la sesión; la base devuelve el post actualizado.
   const act = {
-    vote: (id, dir) => change(id, (p) => { const v = { ...p.votes }; v[me.name] === dir ? delete v[me.name] : (v[me.name] = dir); return { ...p, votes: v }; }),
-    toggleInterest: (id, role) => change(id, (p) => {
-      const has = p.interest.some((x) => x.name === me.name);
-      return { ...p, interest: has ? p.interest.filter((x) => x.name !== me.name) : [...p.interest, { name: me.name, role }] };
-    }),
-    addComment: (id, text, parent = null) => change(id, (p) => ({ ...p, comments: [...p.comments, { id: newId(), who: me.name, text, t: Date.now(), parent }] })),
-    // con respuestas se marca eliminado para no romper el hilo; sin respuestas se borra
-    removeComment: (id, cid) => change(id, (p) => {
-      const own = (c) => c.id === cid && c.who === me.name;
-      return p.comments.some((c) => c.parent === cid)
-        ? { ...p, comments: p.comments.map((c) => (own(c) ? { ...c, text: "", deleted: true } : c)) }
-        : { ...p, comments: p.comments.filter((c) => !own(c)) };
-    }),
-    edit: (id, fields) => change(id, (p) => ({ ...p, ...fields })),
-    addLink: (id, l) => change(id, (p) => (p.links.some((x) => x.to === l.to && x.type === l.type) ? p : { ...p, links: [...p.links, l] })),
-    removeLink: (id, l) => change(id, (p) => ({ ...p, links: p.links.filter((x) => !(x.to === l.to && x.type === l.type)) })),
+    vote: (id, dir) => run(vote(id, dir).then(apply)),
+    toggleInterest: (id, role) => run(toggleInterest(id, role).then(apply)),
+    addComment: (id, text, parent = null) => run(addComment(id, text, parent).then(apply)),
+    removeComment: (id, cid) => run(removeComment(id, cid).then(apply)),
+    edit: (id, fields) => run(updatePost(id, fields).then(apply)),
+    addLink: (id, l) => run(addLink(id, l).then(apply)),
+    removeLink: (id, l) => run(removeLink(id, l).then(apply)),
     remove: (id) => run(deletePost(id).then(() => setPosts((xs) => xs.filter((p) => p.id !== id)))),
     jump: (id) => { const p = byId[id]; if (p) { setTab(p.kind); setTrack("Todos"); setOpen(id); scrollTo.current = id; } },
   };
   const addPost = (draft) => {
-    const p = norm({ ...draft, id: newId(), author: me.name, t: Date.now(), votes: { [me.name]: 1 },
-      interest: draft.kind === "proyecto" ? [{ name: me.name, role: me.role }] : [] });
-    return run(savePost(p).then((s) => { setPosts((xs) => [s, ...xs]); setTab(s.kind); setOpen(s.id); }));
+    const p = norm({ ...draft, id: newId(), author: me.name, t: Date.now(), votes: { [me.id]: 1 },
+      interest: draft.kind === "proyecto" ? [{ id: me.id, name: me.name, role: me.role }] : [] });
+    return run(createPost(p).then((s) => { setPosts((xs) => [s, ...xs]); setTab(s.kind); setOpen(s.id); }));
   };
-  const saveProfile = (p) => { persistProfile(p); setMe(p); };
-  const changeProfile = () => { clearProfile(); setMe(null); };
+  const changeRole = (role) => run(auth.updateRole(role).then(setMe));
+  const signOut = () => run(auth.signOut().then(() => { setMe(null); setOpen(null); setTab("proyecto"); }));
 
   const byId = useMemo(() => Object.fromEntries(posts.map((p) => [p.id, p])), [posts]);
   const num = useMemo(() => { const o = {}; [...posts].sort((a, b) => a.t - b.t).forEach((p, k) => (o[p.id] = k + 1)); return o; }, [posts]);
@@ -172,7 +161,8 @@ export default function App() {
             Modo demo: los datos quedan en este navegador y se comparten entre sus pestañas. Nada llega al grupo.
           </div>
         )}
-        {configured && !me && <NameGate onSave={saveProfile} />}
+        {configured && !authReady && <p className="py-6 text-sm" style={{ fontFamily: SANS, color: C.muted }}>Cargando…</p>}
+        {configured && authReady && !me && <AuthGate onDone={setMe} />}
         {err && <div className="mt-3 text-sm px-3 py-2 rounded" style={{ fontFamily: SANS, background: "#FBEEEC", color: C.down }}>{err}</div>}
 
         {me && isFeed && (
@@ -207,11 +197,7 @@ export default function App() {
         {me && tab === "equipos" && <Teams posts={posts.filter((p) => p.kind === "proyecto")} onJump={act.jump} />}
         {me && tab === "nuevo" && <NewPost posts={posts} num={num} onSubmit={addPost} />}
 
-        {me && (
-          <p className="mt-10 text-xs leading-relaxed" style={{ fontFamily: SANS, color: C.muted }}>
-            Participás como <b>{me.name}</b> · {me.role} · <button onClick={changeProfile} className="py-1" style={{ textDecoration: "underline" }}>cambiar</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
-          </p>
-        )}
+        {me && <Footer me={me} onRole={changeRole} onSignOut={signOut} />}
         <Report me={me} tab={tab} err={err} />
       </div>
     </div>
@@ -248,30 +234,6 @@ function Report({ me, tab, err }) {
           <span>Se adjuntan navegador, tamaño de pantalla y versión. Si no tenés cuenta de GitHub, copialo y mandalo al grupo.</span>
         </div>
       )}
-    </div>
-  );
-}
-
-// Campo de perfil con autocompletado desde el datalist "perfiles" (definido una vez en App).
-function ProfileInput({ value, onChange, className = "", ...rest }) {
-  return <input list="perfiles" value={value} onChange={(e) => onChange(e.target.value)} maxLength={40} placeholder="perfil: interp, infra, policy, escritura…"
-    className={`text-sm px-3 rounded ${className}`} style={BORDER} {...rest} />;
-}
-
-function NameGate({ onSave }) {
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const ok = name.trim().length >= 2 && role.trim().length >= 2;
-  const save = () => ok && onSave({ name: name.trim().replace(/\s+/g, " "), role: role.trim() });
-  return (
-    <div className="mt-6 p-4 rounded" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
-      <p className="text-sm mb-3" style={{ color: C.muted }}>Para votar, publicar y sumarte a proyectos, elegí un nombre de usuario y contá en pocas palabras qué perfil aportás. Queda guardado en este navegador.</p>
-      <div className="flex flex-wrap gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="nombre de usuario" maxLength={30} className="flex-1 min-w-0 text-sm px-3 py-2 rounded" style={BORDER}
-          onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
-        <ProfileInput value={role} onChange={setRole} className="flex-1 min-w-0 py-2" onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
-        <button disabled={!ok} onClick={save} className="text-sm px-4 py-2 rounded font-semibold" style={{ background: ok ? C.accent : C.line, color: ok ? "#fff" : C.muted }}>Entrar</button>
-      </div>
     </div>
   );
 }
@@ -395,7 +357,7 @@ function Comment({ c, depth, me, replying, onReply, onSend, onRemove }) {
         {!c.deleted && <span style={{ color: C.ink }}>{c.who}</span>}
         <span>{when(c.t)}</span>
         {!c.deleted && <button onClick={onReply} className="px-1 py-1 -my-1" style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
-        {!c.deleted && c.who === me.name && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-2 py-1 -my-1" style={{ fontSize: 14 }}>×</button>}
+        {!c.deleted && c.uid === me.id && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-2 py-1 -my-1" style={{ fontSize: 14 }}>×</button>}
       </div>
       <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 15, color: c.deleted ? C.muted : C.ink, fontStyle: c.deleted ? "italic" : "normal" }}>{c.deleted ? "comentario eliminado" : c.text}</p>
       {replying && <CommentBox autoFocus placeholder={`Responder a ${c.who}…`} onSend={onSend} />}
@@ -408,10 +370,10 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
   const isProj = p.kind === "proyecto";
-  const own = p.author === me.name;
+  const own = p.author_id === me.id;
   const col = isProj ? C.accent : C.insight;
-  const joined = p.interest.some((x) => x.name === me.name);
-  const my = p.votes[me.name] || 0;
+  const joined = p.interest.some((x) => x.id === me.id);
+  const my = p.votes[me.id] || 0;
   const s = score(p), nc = alive(p);
   const short = (id) => { const t = byId[id]?.title || ""; return t.slice(0, 34) + (t.length > 34 ? "…" : ""); };
   const link = { fontFamily: SANS, textDecoration: "underline" };

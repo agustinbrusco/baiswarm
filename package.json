@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "backup": "node scripts/backup.mjs",
     "e2e": "node e2e/test.mjs",
-    "check": "node scripts/check.mjs"
+    "check": "node scripts/check.mjs",
+    "invite": "node scripts/invite.mjs",
+    "set-password": "node scripts/set-password.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
