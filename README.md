@@ -2,13 +2,13 @@
 
 Buenos Aires Safety War Room. Message board de BAISH para organizar proyectos y equipos de cara a hackathons; el primero es el AI Incident Response Sprint de Apart y CeSIA (11–13 de septiembre de 2026).
 
-Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días; tienen "me sumaría" con perfil y aparecen en Equipos) e **insights** (observaciones, hipótesis, lecturas; informan proyectos, no forman equipo). Votos, comentarios y vínculos tipados entre posts. Los vínculos se ven desde los dos lados y cualquiera puede agregarlos o quitarlos desde un post abierto; el texto lo edita solo su autor.
+Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días; tienen "me sumaría" con perfil y aparecen en Equipos) e **insights** (observaciones, hipótesis, lecturas; informan proyectos, no forman equipo). Votos, comentarios anidados y vínculos tipados entre posts. Los vínculos se ven desde los dos lados y cualquiera puede agregarlos o quitarlos desde un post abierto; el texto lo edita solo su autor.
 
 ## Stack
 
-- React 18 + Vite + Tailwind 4 (frontend estático)
+- React 19 + Vite 8 + Tailwind 4 (frontend estático)
 - Supabase (Postgres + realtime) como backend, sin servidor propio
-- Sin login: nombre y rol se guardan en el navegador. El acceso "cerrado" es el link no público.
+- Sin login: nombre de usuario y perfil (texto libre) se guardan en el navegador. El acceso "cerrado" es el link no público.
 
 ## Puesta en marcha (unos 15 minutos)
 

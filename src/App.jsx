@@ -17,8 +17,10 @@ const C = {
 const SERIF = "'Iowan Old Style','Palatino Linotype','Charter',Georgia,serif";
 const SANS = "-apple-system,'Inter','Segoe UI',Roboto,sans-serif";
 const FIELD = { border: `1px solid ${C.line}`, background: C.card, width: "100%", fontFamily: SERIF, fontSize: 16 };
+const BORDER = { border: `1px solid ${C.line}` };
 
-const ROLES = ["ML/interp", "Seguridad", "Policy", "Forecasting"];
+// Sugerencias de perfil. El campo es libre: sirven para autocompletar, no para encasillar.
+const PROFILE_HINTS = ["Interpretabilidad", "ML / entrenamiento", "Seguridad informática", "Infra / DevOps", "Policy / regulación", "Forecasting", "Derecho", "Economía", "Escritura / comunicación", "Diseño / producto", "Organización / coordinación"];
 const TRACKS = ["Contención", "Detección", "Forecasting", "Regulación", "Tabletop", "General"];
 const KINDS = { proyecto: "Proyecto", insight: "Insight" };
 // vínculos permitidos según tipo de origen → tipo de destino. `inv` es cómo se lee el mismo vínculo desde el destino.
@@ -34,6 +36,8 @@ const daysTo = (d) => Math.max(0, Math.ceil((new Date(d) - new Date()) / 8640000
 const score = (p) => Object.values(p.votes).reduce((a, b) => a + b, 0);
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const when = (t) => new Date(t).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const alive = (p) => p.comments.filter((c) => !c.deleted).length;
 
 export default function App() {
   const [me, setMe] = useState(() => loadProfile());
@@ -80,8 +84,14 @@ export default function App() {
       const has = p.interest.some((x) => x.name === me.name);
       return { ...p, interest: has ? p.interest.filter((x) => x.name !== me.name) : [...p.interest, { name: me.name, role }] };
     }),
-    addComment: (id, text) => change(id, (p) => ({ ...p, comments: [...p.comments, { who: me.name, text, t: Date.now() }] })),
-    removeComment: (id, t) => change(id, (p) => ({ ...p, comments: p.comments.filter((c) => !(c.t === t && c.who === me.name)) })),
+    addComment: (id, text, parent = null) => change(id, (p) => ({ ...p, comments: [...p.comments, { id: newId(), who: me.name, text, t: Date.now(), parent }] })),
+    // con respuestas se marca eliminado para no romper el hilo; sin respuestas se borra
+    removeComment: (id, cid) => change(id, (p) => {
+      const own = (c) => c.id === cid && c.who === me.name;
+      return p.comments.some((c) => c.parent === cid)
+        ? { ...p, comments: p.comments.map((c) => (own(c) ? { ...c, text: "", deleted: true } : c)) }
+        : { ...p, comments: p.comments.filter((c) => !own(c)) };
+    }),
     edit: (id, fields) => change(id, (p) => ({ ...p, ...fields })),
     addLink: (id, l) => change(id, (p) => (p.links.some((x) => x.to === l.to && x.type === l.type) ? p : { ...p, links: [...p.links, l] })),
     removeLink: (id, l) => change(id, (p) => ({ ...p, links: p.links.filter((x) => !(x.to === l.to && x.type === l.type)) })),
@@ -126,6 +136,7 @@ export default function App() {
 
   return (
     <div style={{ background: C.paper, color: C.ink, minHeight: "100vh", fontFamily: SERIF }}>
+      <datalist id="perfiles">{PROFILE_HINTS.map((h) => <option key={h} value={h} />)}</datalist>
       <div className="max-w-2xl mx-auto px-4 pb-16">
         <header className="pt-6 pb-4" style={{ borderBottom: `1px solid ${C.line}` }}>
           <div className="flex items-baseline justify-between gap-3" style={{ fontFamily: SANS }}>
@@ -150,7 +161,7 @@ export default function App() {
         </header>
 
         {!configured && (
-          <div className="mt-6 p-4 rounded text-sm leading-relaxed" style={{ background: C.card, border: `1px solid ${C.line}`, fontFamily: SANS }}>
+          <div className="mt-6 p-4 rounded text-sm leading-relaxed" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
             Falta configurar Supabase. Copiá <code>.env.example</code> a <code>.env</code>, completá la URL y la anon key del proyecto, y reiniciá el servidor. Los pasos completos están en el README.
           </div>
         )}
@@ -160,7 +171,7 @@ export default function App() {
         {me && isFeed && (
           <>
             <div className="flex flex-wrap gap-2 items-center py-3 text-sm" style={{ fontFamily: SANS }}>
-              <select value={track} onChange={(e) => setTrack(e.target.value)} className="px-2 py-1 rounded bg-transparent" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+              <select value={track} onChange={(e) => setTrack(e.target.value)} className="px-2 py-1 rounded bg-transparent" style={{ ...BORDER, color: C.ink }}>
                 {["Todos", ...TRACKS].map((t) => <option key={t}>{t}</option>)}
               </select>
               <span className="ml-auto flex gap-3" style={{ color: C.muted }}>
@@ -191,7 +202,7 @@ export default function App() {
 
         {me && (
           <p className="mt-10 text-xs leading-relaxed" style={{ fontFamily: SANS, color: C.muted }}>
-            Participás como {me.name} ({me.role}) · <button onClick={changeProfile} style={{ textDecoration: "underline" }}>cambiar</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
+            Participás como <b>{me.name}</b> · {me.role} · <button onClick={changeProfile} style={{ textDecoration: "underline" }}>cambiar</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
           </p>
         )}
       </div>
@@ -199,20 +210,25 @@ export default function App() {
   );
 }
 
+// Campo de perfil con autocompletado desde el datalist "perfiles" (definido una vez en App).
+function ProfileInput({ value, onChange, className = "", ...rest }) {
+  return <input list="perfiles" value={value} onChange={(e) => onChange(e.target.value)} maxLength={40} placeholder="perfil: interp, infra, policy, escritura…"
+    className={`text-sm px-3 rounded ${className}`} style={BORDER} {...rest} />;
+}
+
 function NameGate({ onSave }) {
   const [name, setName] = useState("");
-  const [role, setRole] = useState(ROLES[0]);
-  const ok = name.trim().length >= 2;
+  const [role, setRole] = useState("");
+  const ok = name.trim().length >= 2 && role.trim().length >= 2;
+  const save = () => ok && onSave({ name: name.trim().replace(/\s+/g, " "), role: role.trim() });
   return (
-    <div className="mt-6 p-4 rounded" style={{ background: C.card, border: `1px solid ${C.line}`, fontFamily: SANS }}>
-      <p className="text-sm mb-3" style={{ color: C.muted }}>Para votar, publicar y sumarte a proyectos, decinos quién sos. Queda guardado en este navegador.</p>
+    <div className="mt-6 p-4 rounded" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
+      <p className="text-sm mb-3" style={{ color: C.muted }}>Para votar, publicar y sumarte a proyectos, elegí un nombre de usuario y contá en pocas palabras qué perfil aportás. Queda guardado en este navegador.</p>
       <div className="flex flex-wrap gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" className="flex-1 min-w-0 text-sm px-3 py-2 rounded" style={{ border: `1px solid ${C.line}` }}
-          onKeyDown={(e) => { if (e.key === "Enter" && ok) onSave({ name: name.trim(), role }); }} />
-        <select value={role} onChange={(e) => setRole(e.target.value)} className="text-sm px-2 py-2 rounded bg-transparent" style={{ border: `1px solid ${C.line}` }}>
-          {ROLES.map((r) => <option key={r}>{r}</option>)}
-        </select>
-        <button disabled={!ok} onClick={() => onSave({ name: name.trim(), role })} className="text-sm px-4 py-2 rounded font-semibold" style={{ background: ok ? C.accent : C.line, color: ok ? "#fff" : C.muted }}>Entrar</button>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="nombre de usuario" maxLength={30} className="flex-1 min-w-0 text-sm px-3 py-2 rounded" style={BORDER}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+        <ProfileInput value={role} onChange={setRole} className="flex-1 min-w-0 py-2" onKeyDown={(e) => { if (e.key === "Enter") save(); }} />
+        <button disabled={!ok} onClick={save} className="text-sm px-4 py-2 rounded font-semibold" style={{ background: ok ? C.accent : C.line, color: ok ? "#fff" : C.muted }}>Entrar</button>
       </div>
     </div>
   );
@@ -241,7 +257,7 @@ function PostFields({ kind, d, setD }) {
       {!isProj && <input value={d.url} onChange={set("url")} placeholder="Link a la fuente (opcional)" className="px-3 py-2 rounded" style={{ ...FIELD, fontFamily: SANS, fontSize: 14 }} />}
       <div className="flex gap-2 items-center text-sm">
         <span style={{ color: C.muted }}>Track</span>
-        <select value={d.track} onChange={set("track")} className="px-2 py-1 rounded bg-transparent" style={{ border: `1px solid ${C.line}` }}>
+        <select value={d.track} onChange={set("track")} className="px-2 py-1 rounded bg-transparent" style={BORDER}>
           {TRACKS.map((t) => <option key={t}>{t}</option>)}
         </select>
       </div>
@@ -256,20 +272,19 @@ function LinkPicker({ kind, posts, num, exclude = [], onAdd }) {
   const opts = Object.entries(REL).filter(([, r]) => r.from === kind);
   const targets = type ? posts.filter((p) => p.kind === REL[type].to && !exclude.includes(p.id)) : [];
   const what = type ? KINDS[REL[type].to].toLowerCase() : "";
-  const sel = { border: `1px solid ${C.line}` };
   return (
     <div className="flex flex-wrap gap-2 items-center text-sm" style={{ fontFamily: SANS }}>
-      <select value={type} onChange={(e) => { setType(e.target.value); setTo(""); }} className="px-2 py-1 rounded bg-transparent" style={sel}>
+      <select value={type} onChange={(e) => { setType(e.target.value); setTo(""); }} className="px-2 py-1 rounded bg-transparent" style={BORDER}>
         <option value="">vincular…</option>
         {opts.map(([k, r]) => <option key={k} value={k}>{r.label}</option>)}
       </select>
       {type && (
-        <select value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1 rounded bg-transparent flex-1 min-w-0" style={sel}>
+        <select value={to} onChange={(e) => setTo(e.target.value)} className="px-2 py-1 rounded bg-transparent flex-1 min-w-0" style={BORDER}>
           <option value="">{targets.length ? `${what}…` : `no hay ${what}s para vincular`}</option>
           {targets.map((p) => <option key={p.id} value={p.id}>#{num[p.id]} {p.title.slice(0, 40)}</option>)}
         </select>
       )}
-      <button disabled={!to} onClick={() => { onAdd({ to, type }); setTo(""); }} className="px-3 py-1 rounded" style={{ ...sel, opacity: to ? 1 : 0.5 }}>Agregar</button>
+      <button disabled={!to} onClick={() => { onAdd({ to, type }); setTo(""); }} className="px-3 py-1 rounded" style={{ ...BORDER, opacity: to ? 1 : 0.5 }}>Agregar</button>
     </div>
   );
 }
@@ -288,14 +303,65 @@ function EditPost({ post: p, onSave, onCancel }) {
       <PostFields kind={p.kind} d={d} setD={setD} />
       <div className="flex gap-2 text-sm">
         <button disabled={!ok} onClick={save} className="px-4 py-1.5 rounded font-semibold" style={{ background: ok ? C.accent : C.line, color: ok ? "#fff" : C.muted }}>{saving ? "Guardando…" : "Guardar"}</button>
-        <button onClick={onCancel} className="px-3 py-1.5 rounded" style={{ border: `1px solid ${C.line}`, color: C.muted }}>Cancelar</button>
+        <button onClick={onCancel} className="px-3 py-1.5 rounded" style={{ ...BORDER, color: C.muted }}>Cancelar</button>
       </div>
     </div>
   );
 }
 
-function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open, onOpen, act }) {
+function CommentBox({ placeholder, onSend, autoFocus }) {
   const [text, setText] = useState("");
+  const send = () => { if (text.trim()) { onSend(text.trim()); setText(""); } };
+  return (
+    <div className="flex gap-2 mt-2" style={{ fontFamily: SANS }}>
+      <input autoFocus={autoFocus} value={text} onChange={(e) => setText(e.target.value)} placeholder={placeholder} className="flex-1 min-w-0 text-sm px-2 py-1 rounded bg-transparent" style={BORDER}
+        onKeyDown={(e) => { if (e.key === "Enter") send(); }} />
+      <button onClick={send} className="text-sm px-3 py-1 rounded" style={BORDER}>Enviar</button>
+    </div>
+  );
+}
+
+// Hilo de comentarios: árbol por `parent`, renderizado plano con sangría por profundidad (tope visual de 4 niveles).
+function Comments({ post: p, me, act }) {
+  const [replyTo, setReplyTo] = useState(null);
+  const byParent = useMemo(() => {
+    const o = {};
+    p.comments.forEach((c) => { const k = c.parent || "root"; (o[k] = o[k] || []).push(c); });
+    Object.values(o).forEach((xs) => xs.sort((a, b) => a.t - b.t));
+    return o;
+  }, [p.comments]);
+  const render = (parent, depth) => (byParent[parent] || []).flatMap((c) => [
+    <Comment key={c.id} c={c} depth={depth} me={me} replying={replyTo === c.id}
+      onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
+      onSend={(text) => { act.addComment(p.id, text, c.id); setReplyTo(null); }}
+      onRemove={() => act.removeComment(p.id, c.id)} />,
+    ...render(c.id, depth + 1),
+  ]);
+  return (
+    <div className="mt-4">
+      {render("root", 0)}
+      <CommentBox placeholder="Comentar…" onSend={(text) => act.addComment(p.id, text, null)} />
+    </div>
+  );
+}
+
+function Comment({ c, depth, me, replying, onReply, onSend, onRemove }) {
+  const d = Math.min(depth, 4);
+  return (
+    <div className="py-2" style={{ borderTop: `1px solid ${C.line}`, marginLeft: d * 14, paddingLeft: d ? 10 : 0, borderLeft: d ? `2px solid ${C.line}` : "none" }}>
+      <div className="flex gap-2 text-xs" style={{ fontFamily: SANS, color: C.muted }}>
+        {!c.deleted && <span style={{ color: C.ink }}>{c.who}</span>}
+        <span>{when(c.t)}</span>
+        {!c.deleted && <button onClick={onReply} style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
+        {!c.deleted && c.who === me.name && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-1">×</button>}
+      </div>
+      <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 15, color: c.deleted ? C.muted : C.ink, fontStyle: c.deleted ? "italic" : "normal" }}>{c.deleted ? "comentario eliminado" : c.text}</p>
+      {replying && <CommentBox autoFocus placeholder={`Responder a ${c.who}…`} onSend={onSend} />}
+    </div>
+  );
+}
+
+function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open, onOpen, act }) {
   const [role, setRole] = useState(me.role);
   const [editing, setEditing] = useState(false);
   const [linking, setLinking] = useState(false);
@@ -304,7 +370,7 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
   const col = isProj ? C.accent : C.insight;
   const joined = p.interest.some((x) => x.name === me.name);
   const my = p.votes[me.name] || 0;
-  const s = score(p);
+  const s = score(p), nc = alive(p);
   const short = (id) => { const t = byId[id]?.title || ""; return t.slice(0, 34) + (t.length > 34 ? "…" : ""); };
   const link = { fontFamily: SANS, textDecoration: "underline" };
 
@@ -332,7 +398,7 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
               {isProj && <span>{p.interest.length} {p.interest.length === 1 ? "interesado" : "interesados"}</span>}
               {isProj && supports.length > 0 && <span style={{ color: C.insight }}>se apoya en {supports.length} {supports.length === 1 ? "insight" : "insights"}</span>}
               {orphan && <span style={{ color: C.warn }}>sin proyecto todavía</span>}
-              {p.comments.length > 0 && <span>{p.comments.length} {p.comments.length === 1 ? "comentario" : "comentarios"}</span>}
+              {nc > 0 && <span>{nc} {nc === 1 ? "comentario" : "comentarios"}</span>}
               {p.url && <a href={p.url} target="_blank" rel="noreferrer" style={{ color: col, textDecoration: "underline" }}>fuente</a>}
             </div>
             {rels.length > 0 && (
@@ -350,38 +416,18 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
                 <p className="leading-relaxed whitespace-pre-wrap" style={{ fontSize: 16 }}>{p.body}</p>
 
                 {isProj && (
-                  <div className="mt-4 p-3 rounded" style={{ background: C.card, border: `1px solid ${C.line}`, fontFamily: SANS }}>
+                  <div className="mt-4 p-3 rounded" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
                     <div className="text-sm mb-2">{p.interest.length === 0 ? "Nadie se sumó todavía." : p.interest.map((x) => `${x.name} (${x.role})`).join(", ")}</div>
-                    <div className="flex gap-2 items-center">
-                      {!joined && (
-                        <select value={role} onChange={(e) => setRole(e.target.value)} className="text-sm px-2 py-1 rounded bg-transparent" style={{ border: `1px solid ${C.line}` }}>
-                          {ROLES.map((r) => <option key={r}>{r}</option>)}
-                        </select>
-                      )}
-                      <button onClick={() => act.toggleInterest(p.id, role)} className="text-sm px-3 py-1 rounded" style={joined ? { border: `1px solid ${C.line}`, color: C.muted } : { background: C.accent, color: "#fff" }}>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {!joined && <ProfileInput value={role} onChange={setRole} className="flex-1 min-w-0 py-1" />}
+                      <button onClick={() => role.trim() && act.toggleInterest(p.id, role.trim())} className="text-sm px-3 py-1 rounded" style={joined ? { ...BORDER, color: C.muted } : { background: C.accent, color: "#fff" }}>
                         {joined ? "Bajarme" : "Me sumaría"}
                       </button>
                     </div>
                   </div>
                 )}
 
-                <div className="mt-4">
-                  {p.comments.map((c, k) => (
-                    <div key={`${c.t}-${k}`} className="py-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                      <div className="flex gap-2 text-xs" style={{ fontFamily: SANS, color: C.muted }}>
-                        <span>{c.who}</span>
-                        <span>{when(c.t)}</span>
-                        {c.who === me.name && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={() => act.removeComment(p.id, c.t)} className="ml-auto px-1">×</button>}
-                      </div>
-                      <p className="leading-relaxed" style={{ fontSize: 15 }}>{c.text}</p>
-                    </div>
-                  ))}
-                  <div className="flex gap-2 mt-2" style={{ fontFamily: SANS }}>
-                    <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Comentar…" className="flex-1 text-sm px-2 py-1 rounded bg-transparent" style={{ border: `1px solid ${C.line}` }}
-                      onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { act.addComment(p.id, text.trim()); setText(""); } }} />
-                    <button onClick={() => { if (text.trim()) { act.addComment(p.id, text.trim()); setText(""); } }} className="text-sm px-3 py-1 rounded" style={{ border: `1px solid ${C.line}` }}>Enviar</button>
-                  </div>
-                </div>
+                <Comments post={p} me={me} act={act} />
 
                 <div className="flex gap-3 mt-4 text-xs" style={{ color: C.muted }}>
                   <button onClick={() => setLinking(!linking)} style={link}>{linking ? "Cerrar" : "Vincular"}</button>
@@ -409,21 +455,22 @@ function Teams({ posts, onJump }) {
   const overbooked = Object.entries(people).filter(([, xs]) => xs.length > 1);
   return (
     <div className="pt-4">
-      <p className="leading-relaxed mb-4" style={{ color: C.muted, fontSize: 15 }}>Equipos tentativos según quién se sumó a qué proyecto. Un equipo viable tiene 3 a 5 personas y cubre al menos dos perfiles.</p>
+      <p className="leading-relaxed mb-4" style={{ color: C.muted, fontSize: 15 }}>Equipos tentativos según quién se sumó a qué proyecto. Un equipo viable tiene 3 a 5 personas y cubre al menos dos perfiles distintos.</p>
       {ranked.length === 0 && <p className="text-sm" style={{ fontFamily: SANS, color: C.muted }}>Sin proyectos todavía.</p>}
       {ranked.map((p) => {
-        const cover = ROLES.map((r) => ({ r, n: p.interest.filter((x) => x.role === r).length }));
-        const n = p.interest.length, profiles = cover.filter((c) => c.n > 0).length;
-        const viable = n >= 3 && n <= 5 && profiles >= 2;
+        // perfiles distintos entre los interesados, agrupando por texto normalizado
+        const cover = p.interest.reduce((acc, x) => { const hit = acc.find((c) => same(c.r, x.role)); hit ? hit.n++ : acc.push({ r: x.role, n: 1 }); return acc; }, []);
+        const n = p.interest.length;
+        const viable = n >= 3 && n <= 5 && cover.length >= 2;
         const status = n === 0 ? "Sin gente todavía" : viable ? "Viable" : n > 5 ? `Demasiada gente (${n}/5): dividir o que algunos elijan otro` : n < 3 ? `Falta gente (${n}/3)` : "Falta otro perfil";
         return (
           <div key={p.id} className="py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
             <button onClick={() => onJump(p.id)} className="text-left"><h3 className="leading-snug" style={{ fontSize: 17, fontWeight: 500 }}>{p.title}</h3></button>
-            <div className="flex flex-wrap gap-2 mt-2" style={{ fontFamily: SANS }}>
-              {cover.map(({ r, n }) => (
-                <span key={r} className="text-xs px-2 py-0.5 rounded" style={{ background: n ? C.accentSoft : "transparent", color: n ? C.accent : C.muted, border: `1px solid ${n ? C.accentSoft : C.line}` }}>{r}{n ? ` ×${n}` : ""}</span>
-              ))}
-            </div>
+            {cover.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2" style={{ fontFamily: SANS }}>
+                {cover.map(({ r, n }) => <span key={r} className="text-xs px-2 py-0.5 rounded" style={{ background: C.accentSoft, color: C.accent }}>{r}{n > 1 ? ` ×${n}` : ""}</span>)}
+              </div>
+            )}
             <div className="mt-2 text-sm" style={{ fontFamily: SANS, color: viable ? C.up : n ? C.warn : C.muted }}>
               {status}{n > 0 && ` · ${p.interest.map((x) => x.name).join(", ")}`}
             </div>
@@ -431,7 +478,7 @@ function Teams({ posts, onJump }) {
         );
       })}
       {overbooked.length > 0 && (
-        <div className="mt-6 p-3 rounded text-sm" style={{ background: C.card, border: `1px solid ${C.line}`, fontFamily: SANS }}>
+        <div className="mt-6 p-3 rounded text-sm" style={{ background: C.card, ...BORDER, fontFamily: SANS }}>
           <div className="font-semibold mb-1">Personas anotadas en más de un proyecto</div>
           {overbooked.map(([n, xs]) => <div key={n} style={{ color: C.muted }}>{n}: {xs.map((p) => p.title.slice(0, 30)).join(" / ")}</div>)}
           <div className="mt-2" style={{ color: C.muted }}>Cuando cierren los equipos, cada uno elige uno.</div>
@@ -457,7 +504,7 @@ function NewPost({ posts, num, onSubmit }) {
 
   return (
     <div className="pt-4 flex flex-col gap-3" style={{ fontFamily: SANS }}>
-      <div className="flex rounded overflow-hidden self-start text-sm" style={{ border: `1px solid ${C.line}` }}>
+      <div className="flex rounded overflow-hidden self-start text-sm" style={BORDER}>
         {Object.entries(KINDS).map(([k, l]) => (
           <button key={k} onClick={() => switchKind(k)} className="px-4 py-2" style={{ background: kind === k ? (k === "proyecto" ? C.accent : C.insight) : "transparent", color: kind === k ? "#fff" : C.muted }}>{l}</button>
         ))}
