@@ -18,7 +18,8 @@ const bad = (s) => { fails++; console.log("FALLA:", s); };
 // 2. la anon key sin sesión no lee posts
 {
   const { data, error } = await anon.from("posts").select("id");
-  if (error) bad(`leer posts sin sesión: ${error.message}`);
+  if (error && /permission denied/i.test(error.message)) ok("permisos: sin sesión no hay acceso a la tabla posts");
+  else if (error) bad(`leer posts sin sesión: ${error.message}`);
   else if (data.length) bad(`sin sesión se leen ${data.length} posts: RLS abierta`);
   else ok("RLS: sin sesión no se lee ningún post");
 }

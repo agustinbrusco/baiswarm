@@ -38,8 +38,9 @@ const problems = [];
 const note = (s) => { problems.push(s); console.log("PROBLEMA:", s); };
 const ok = (s) => console.log("ok:", s);
 
+let expect400 = false; // mientras se prueba una contraseña incorrecta, el 400 de Auth es el resultado esperado
 function wire(page, tag) {
-  page.on("console", (m) => { if (m.type() === "error") note(`${tag} console.error: ${m.text().slice(0, 200)}`); });
+  page.on("console", (m) => { if (m.type() === "error" && !(expect400 && /status of 400/.test(m.text()))) note(`${tag} console.error: ${m.text().slice(0, 200)}`); });
   page.on("pageerror", (e) => note(`${tag} pageerror: ${e.message.slice(0, 200)}`));
 }
 async function noOverflow(page, tag) {
@@ -211,8 +212,10 @@ try {
   // salir y volver a entrar
   await m.getByRole("button", { name: "salir" }).click();
   await must(m.getByRole("button", { name: "Entrar" }), "mobile: sesión cerrada");
+  expect400 = true;
   await login(m, B, "incorrecta-123");
   await must(m.getByText("Usuario o contraseña incorrectos"), "mobile: contraseña incorrecta rechazada", 15000);
+  expect400 = false;
   await login(m, B, PASS);
   await must(m.getByText(new RegExp(`Participás como ${B}`)), "mobile: volvió a entrar", 15000);
   await must(heading(m, /\(v2\)/), "mobile: ve los datos tras volver a entrar", 15000);
