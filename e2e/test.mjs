@@ -169,6 +169,13 @@ try {
   await d.getByPlaceholder(new RegExp(`Responder a ${A}`)).fill("Conexiones salientes inesperadas, **para empezar**."); await d.keyboard.press("Enter");
   await must(d.getByText("Conexiones salientes inesperadas"), "respuesta anidada");
   await must(d.locator(".md strong", { hasText: "para empezar" }), "markdown en comentario");
+  // votos en comentarios: solo positivos, toggle
+  const cvote = 'button[aria-label="Votar comentario"]';
+  await d.locator(cvote).nth(1).click();
+  await must(d.locator(`${cvote}[aria-pressed="true"]`, { hasText: "1" }), "voto en comentario");
+  await d.locator(`${cvote}[aria-pressed="true"]`).click();
+  await d.waitForTimeout(300);
+  if (await d.locator(`${cvote}[aria-pressed="true"]`).count()) note("el voto en comentario no se quitó"); else ok("voto en comentario quitado");
   await must(d.locator(".katex-display"), "fórmula display en el proyecto");
   await must(d.getByText("2 comentarios"), "conteo de comentarios");
   await shot(d, "04-desktop-comentarios");
@@ -198,6 +205,12 @@ try {
   await d.getByRole("button", { name: /Proyectos/ }).click();
   await d.getByPlaceholder("Comentar…").fill("prueba de sincronización"); await d.keyboard.press("Enter");
   await must(d2.getByText("2 comentarios"), "pestaña 2 recibió el cambio sin recargar", REAL ? 15000 : 8000);
+  // el comentario votado sube entre sus hermanos: "prueba de sincronización" (más nuevo) pasa adelante del hilo eliminado
+  await d.locator(cvote).last().click();
+  await heading(d2, /\(v2\)/).click();
+  await must(d2.locator(`${cvote}[aria-pressed="true"]`), "pestaña 2 recibió el voto en comentario", REAL ? 15000 : 8000);
+  { const ts = await d.locator(".md").allInnerTexts(); const i = ts.findIndex((t) => t.includes("prueba de sincronización")), j = ts.findIndex((t) => t.includes("Conexiones salientes"));
+    if (i >= 0 && j >= 0 && i < j) ok("comentario votado sube entre hermanos"); else note(`orden de comentarios por votos: ${i} vs ${j}`); }
 
   // ── Reporte ──
   await d.getByRole("button", { name: "Reportar un problema" }).click();
@@ -226,6 +239,8 @@ try {
   await m.getByRole("button", { name: "responder" }).first().click();
   await m.getByPlaceholder(/Responder a/).fill("Desde policy: qué obligaciones de reporte aplican."); await m.keyboard.press("Enter");
   await must(m.getByText(/Desde policy/), "mobile: respuesta anidada");
+  await m.locator('button[aria-label="Votar comentario"]').first().click();
+  await must(m.locator('button[aria-label="Votar comentario"][aria-pressed="true"]'), "mobile: voto en comentario");
   await noOverflow(m, "mobile comentarios");
   await smallTargets(m, "mobile proyecto abierto");
   await m.getByRole("button", { name: /Insights/ }).click(); await noOverflow(m, "mobile insights"); await shot(m, "09-mobile-insights");

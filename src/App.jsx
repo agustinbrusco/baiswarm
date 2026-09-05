@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vote, toggleInterest, addComment, removeComment, addLink, removeLink, subscribe, norm } from "./storage.js";
+import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vote, toggleInterest, addComment, removeComment, voteComment, addLink, removeLink, subscribe, norm } from "./storage.js";
 import { C, SERIF, SANS, FIELD, BORDER } from "./theme.js";
 import { PROFILE_HINTS, ProfileInput, AuthGate, Footer } from "./Auth.jsx";
 import Md, { MD_HINT } from "./Md.jsx";
@@ -29,6 +29,7 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const when = (t) => new Date(t).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const alive = (p) => p.comments.filter((c) => !c.deleted).length;
+const cscore = (c) => (c.deleted ? 0 : Object.keys(c.votes || {}).length); // votos de comentario: solo positivos
 const fold = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); // sin acentos ni mayúsculas, para buscar
 const PLURAL = { proyecto: ["proyecto", "proyectos"], insight: ["insight", "insights"] };
 const count = (n, kind) => `${n} ${PLURAL[kind][n === 1 ? 0 : 1]}`;
@@ -89,6 +90,7 @@ export default function App() {
     toggleInterest: (id, role) => run(toggleInterest(id, role).then(apply)),
     addComment: (id, text, parent = null) => run(addComment(id, text, parent).then(apply)),
     removeComment: (id, cid) => run(removeComment(id, cid).then(apply)),
+    voteComment: (id, cid) => run(voteComment(id, cid).then(apply)),
     edit: (id, fields) => run(updatePost(id, fields).then(apply)),
     addLink: (id, l) => run(addLink(id, l).then(apply)),
     removeLink: (id, l) => run(removeLink(id, l).then(apply)),
@@ -368,14 +370,14 @@ function Comments({ post: p, me, act }) {
   const byParent = useMemo(() => {
     const o = {};
     p.comments.forEach((c) => { const k = c.parent || "root"; (o[k] = o[k] || []).push(c); });
-    Object.values(o).forEach((xs) => xs.sort((a, b) => a.t - b.t));
+    Object.values(o).forEach((xs) => xs.sort((a, b) => cscore(b) - cscore(a) || a.t - b.t));
     return o;
   }, [p.comments]);
   const render = (parent, depth) => (byParent[parent] || []).flatMap((c) => [
     <Comment key={c.id} c={c} depth={depth} me={me} replying={replyTo === c.id}
       onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
       onSend={(text) => { act.addComment(p.id, text, c.id); setReplyTo(null); }}
-      onRemove={() => act.removeComment(p.id, c.id)} />,
+      onRemove={() => act.removeComment(p.id, c.id)} onVote={() => act.voteComment(p.id, c.id)} />,
     ...render(c.id, depth + 1),
   ]);
   return (
@@ -386,13 +388,19 @@ function Comments({ post: p, me, act }) {
   );
 }
 
-function Comment({ c, depth, me, replying, onReply, onSend, onRemove }) {
+function Comment({ c, depth, me, replying, onReply, onSend, onRemove, onVote }) {
   const d = Math.min(depth, 4);
+  const voted = Boolean(c.votes?.[me.id]), n = cscore(c);
   return (
     <div className="py-2" style={{ borderTop: `1px solid ${C.line}`, marginLeft: d * 14, paddingLeft: d ? 10 : 0, borderLeft: d ? `2px solid ${C.line}` : "none" }}>
       <div className="flex gap-2 text-xs" style={{ fontFamily: SANS, color: C.muted }}>
         {!c.deleted && <span style={{ color: C.ink }}>{c.who}</span>}
         <span>{when(c.t)}</span>
+        {!c.deleted && (
+          <button onClick={onVote} aria-label="Votar comentario" aria-pressed={voted} title={voted ? "Quitar mi voto" : "Votar comentario"} className="px-1 py-1 -my-1 flex items-center gap-1" style={{ color: voted ? C.up : C.muted }}>
+            <span aria-hidden="true" style={{ fontSize: 11 }}>▲</span>{n > 0 && <span style={{ fontWeight: 600, color: voted ? C.up : C.ink }}>{n}</span>}
+          </button>
+        )}
         {!c.deleted && <button onClick={onReply} className="px-1 py-1 -my-1" style={{ textDecoration: "underline" }}>{replying ? "cancelar" : "responder"}</button>}
         {!c.deleted && c.uid === me.id && <button aria-label="Borrar comentario" title="Borrar comentario" onClick={onRemove} className="ml-auto px-2 py-1 -my-1" style={{ fontSize: 14 }}>×</button>}
       </div>

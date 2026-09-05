@@ -106,6 +106,7 @@ const remote = {
   toggleInterest: (id, role) => rpc("post_toggle_interest", { p_id: id, p_role: role }, "No se pudo actualizar el interés"),
   addComment: (id, text, parent = null) => rpc("post_add_comment", { p_id: id, p_text: text, p_parent: parent }, "No se pudo comentar"),
   removeComment: (id, cid) => rpc("post_remove_comment", { p_id: id, p_cid: cid }, "No se pudo borrar el comentario"),
+  voteComment: (id, cid) => rpc("post_vote_comment", { p_id: id, p_cid: cid }, "No se pudo votar el comentario"),
   addLink: (id, l) => rpc("post_add_link", { p_id: id, p_to: l.to, p_type: l.type }, "No se pudo vincular"),
   removeLink: (id, l) => rpc("post_remove_link", { p_id: id, p_to: l.to, p_type: l.type }, "No se pudo quitar el vínculo"),
   // Avisa ante cualquier cambio en la tabla. Requiere sesión: realtime respeta RLS. Devuelve la función para desuscribirse.
@@ -180,6 +181,14 @@ const local = {
         : { ...p, comments: p.comments.filter((c) => !own(c)) };
     });
   },
+  // voto positivo en comentario, toggle; misma forma que post_vote_comment en SQL
+  async voteComment(id, cid) {
+    const me = need();
+    return edit(id, (p) => {
+      if (!p.comments.some((c) => c.id === cid && !c.deleted)) throw new Error("El comentario ya no existe");
+      return { ...p, comments: p.comments.map((c) => { if (c.id !== cid) return c; const v = { ...(c.votes || {}) }; v[me.id] ? delete v[me.id] : (v[me.id] = 1); return { ...c, votes: v }; }) };
+    });
+  },
   async addLink(id, l) { need(); return edit(id, (p) => (p.links.some((x) => x.to === l.to && x.type === l.type) ? p : { ...p, links: [...p.links, l] })); },
   async removeLink(id, l) { need(); return edit(id, (p) => ({ ...p, links: p.links.filter((x) => !(x.to === l.to && x.type === l.type)) })); },
   // el evento "storage" solo llega a las otras pestañas, igual que realtime a los otros clientes
@@ -196,6 +205,7 @@ export const vote = (id, dir) => db.vote(id, dir);
 export const toggleInterest = (id, role) => db.toggleInterest(id, role);
 export const addComment = (id, text, parent) => db.addComment(id, text, parent);
 export const removeComment = (id, cid) => db.removeComment(id, cid);
+export const voteComment = (id, cid) => db.voteComment(id, cid);
 export const addLink = (id, l) => db.addLink(id, l);
 export const removeLink = (id, l) => db.removeLink(id, l);
 export const subscribe = (onChange) => db.subscribe(onChange);

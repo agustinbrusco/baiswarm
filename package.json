@@ -13,7 +13,8 @@
     "check": "node scripts/check.mjs",
     "invite": "node scripts/invite.mjs",
     "set-password": "node scripts/set-password.mjs",
-    "migrate": "node scripts/migrate.mjs"
+    "migrate": "node scripts/migrate.mjs",
+    "sql-test": "node scripts/sql-test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

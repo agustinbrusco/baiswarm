@@ -38,7 +38,10 @@ npx playwright install chromium   # una sola vez
 npm run e2e                       # recorrido completo en escritorio y celular, con capturas en e2e/shots
 E2E_REAL=1 npm run e2e            # lo mismo contra el Supabase de .env, con chequeo de realtime entre navegadores
 npm run check                     # conexión, permisos y realtime del Supabase configurado
+npm run sql-test                  # valida supabase/schema.sql en un Postgres de Supabase local (docker + psql)
 ```
+
+Para cambiar el esquema con usuarios activos: `npm run backup`, `npm run sql-test`, `npm run migrate`, `npm run check`, y recién después publicar la UI. Solo cambios aditivos (funciones o campos nuevos), así una pestaña abierta con la versión anterior sigue funcionando hasta que recargue.
 
 ## Reportar problemas
 
@@ -77,20 +80,23 @@ Usa la secret key de `.env`. Conviene correrlo una vez al día mientras el foro 
 ## Estructura
 
 ```
-src/App.jsx          feed, posts, comentarios, equipos, publicar, reporte
+src/App.jsx          feed, búsqueda, posts, comentarios, equipos, publicar, reporte
 src/Auth.jsx         entrada, registro, perfil y pie de sesión
+src/Md.jsx           markdown y fórmulas (KaTeX) en posts y comentarios
 src/theme.js         paleta y tipografía
 src/storage.js       capa de datos: todo lo que habla con Supabase, y el modo demo
-supabase/schema.sql  tabla, policies y realtime; se puede correr más de una vez
+supabase/schema.sql  tablas, policies, funciones y realtime; se puede correr más de una vez
+supabase/schema.test.sql  pruebas del esquema (npm run sql-test)
 scripts/backup.mjs   backup y restore de la tabla desde la terminal
 scripts/check.mjs    chequeo de esquema, RLS, registro, escritura y realtime
 scripts/invite.mjs   código de invitación
 scripts/set-password.mjs  cambio de contraseña de un usuario
 scripts/migrate.mjs  aplica el esquema con psql
+scripts/sql-test.mjs corre el esquema y sus pruebas en docker
 e2e/test.mjs         recorrido automatizado con Playwright
 ```
 
-`storage.js` expone `auth` y las mutaciones (`vote`, `toggleInterest`, `addComment`, `removeComment`, `addLink`, `removeLink`, `createPost`, `updatePost`, `deletePost`), que llaman a funciones de la base y devuelven el post actualizado. Además de realtime hay un polling cada 60 segundos como red de seguridad.
+`storage.js` expone `auth` y las mutaciones (`vote`, `toggleInterest`, `addComment`, `removeComment`, `voteComment`, `addLink`, `removeLink`, `createPost`, `updatePost`, `deletePost`), que llaman a funciones de la base y devuelven el post actualizado. Además de realtime hay un polling cada 60 segundos como red de seguridad.
 
 ## Próximos pasos posibles
 

@@ -54,6 +54,10 @@ if (!secret) {
         e3 ? bad(`votar: ${e3.message}`) : (v.votes[su.user.id] === 1 ? ok("votar: RPC con identidad del usuario") : bad("votar: el voto no quedó"));
         const { data: c, error: e4 } = await user.rpc("post_add_comment", { p_id: id, p_text: "hola", p_parent: null });
         e4 ? bad(`comentar: ${e4.message}`) : (c.comments.length === 1 ? ok("comentar: RPC") : bad("comentar: no quedó"));
+        if (!e4 && c.comments.length === 1) {
+          const { data: cv, error: e4b } = await user.rpc("post_vote_comment", { p_id: id, p_cid: c.comments[0].id });
+          e4b ? bad(`votar comentario: ${e4b.message}`) : (cv.comments[0].votes?.[su.user.id] === 1 ? ok("votar comentario: RPC") : bad("votar comentario: no quedó"));
+        }
         // realtime con sesión
         const status = await new Promise((res) => {
           const ch = user.channel("check").on("postgres_changes", { event: "*", schema: "public", table: "posts" }, () => {}).subscribe((s, err) => { if (s !== "SUBSCRIBING" && s !== "CONNECTING") res(err ? `${s}: ${err.message}` : s); });

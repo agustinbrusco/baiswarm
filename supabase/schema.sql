@@ -205,6 +205,28 @@ begin
   return v_post;
 end $$;
 
+-- voto positivo en un comentario, toggle. Queda en el comentario como votes {uid: 1}, mismo formato que en el post.
+create or replace function public.post_vote_comment(p_id text, p_cid text) returns public.posts
+language plpgsql security definer set search_path = public as $$
+declare v_uid text := (select auth.uid())::text; v_post public.posts;
+begin
+  if v_uid is null then raise exception 'Hay que iniciar sesión'; end if;
+  if not exists (select 1 from public.posts p, jsonb_array_elements(p.comments) e
+                  where p.id = p_id and e->>'id' = p_cid and coalesce(e->'deleted', 'false'::jsonb) <> 'true'::jsonb) then
+    raise exception 'El comentario ya no existe';
+  end if;
+  update public.posts
+     set comments = coalesce((select jsonb_agg(case when e->>'id' = p_cid then
+                       jsonb_set(e, '{votes}', case when coalesce(e->'votes', '{}'::jsonb) ? v_uid
+                                                    then coalesce(e->'votes', '{}'::jsonb) - v_uid
+                                                    else coalesce(e->'votes', '{}'::jsonb) || jsonb_build_object(v_uid, 1) end)
+                       else e end order by o)
+                     from jsonb_array_elements(comments) with ordinality as x(e, o)), '[]'::jsonb)
+   where id = p_id returning * into v_post;
+  if not found then raise exception 'El post ya no existe'; end if;
+  return v_post;
+end $$;
+
 create or replace function public.post_add_link(p_id text, p_to text, p_type text) returns public.posts
 language plpgsql security definer set search_path = public as $$
 declare v_from text; v_to text; v_post public.posts;
@@ -244,12 +266,14 @@ revoke all on function public.post_vote(text, int)                     from publ
 revoke all on function public.post_toggle_interest(text, text)         from public, anon;
 revoke all on function public.post_add_comment(text, text, text)       from public, anon;
 revoke all on function public.post_remove_comment(text, text)          from public, anon;
+revoke all on function public.post_vote_comment(text, text)            from public, anon;
 revoke all on function public.post_add_link(text, text, text)          from public, anon;
 revoke all on function public.post_remove_link(text, text, text)       from public, anon;
 grant execute on function public.post_vote(text, int)                  to authenticated;
 grant execute on function public.post_toggle_interest(text, text)      to authenticated;
 grant execute on function public.post_add_comment(text, text, text)    to authenticated;
 grant execute on function public.post_remove_comment(text, text)       to authenticated;
+grant execute on function public.post_vote_comment(text, text)         to authenticated;
 grant execute on function public.post_add_link(text, text, text)       to authenticated;
 grant execute on function public.post_remove_link(text, text, text)    to authenticated;
 
