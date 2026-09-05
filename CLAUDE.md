@@ -34,7 +34,7 @@ Perfil (`role`) es texto libre con sugerencias (`PROFILE_HINTS`, un datalist); n
 - Realtime de Supabase con debounce de 300 ms que recarga todo, más polling cada 60 s por si realtime no llega. Lectura y escritura en dos pasos (`mutate`); a esta escala no hace falta atomicidad.
 
 ## Pruebas
-Hay un recorrido end to end con Playwright fuera del repo (escritorio 1280px y iPhone 14): entrar, publicar proyecto e insight vinculados, votar, comentar y responder, editar, vincular, borrar, equipos, sincronización entre pestañas, reporte, y chequeo de overflow horizontal y de contenedores recortados. Correrlo contra `npm run demo` antes de tocar layout. Al 2026-09-05 pasaba sin problemas.
+`npm run e2e` (primera vez: `npx playwright install chromium`). Recorrido end to end en `e2e/test.mjs` contra el modo demo, en escritorio 1280px y iPhone 14: entrar, publicar proyecto e insight vinculados, votar, comentar y responder, editar, vincular, borrar, equipos, sincronización entre pestañas, reporte, y chequeo de overflow horizontal y de contenedores recortados. Levanta y apaga su propio servidor; deja capturas en `e2e/shots/` (ignorado por git). Correrlo antes de tocar layout y mirar las capturas: el script no ve padding ni tipografía. Al 2026-09-05 pasaba sin problemas.
 
 Reporte de problemas: botón al pie que abre un issue en GitHub prellenado con usuario, pestaña, versión (`VITE_COMMIT`, el sha del build), pantalla y navegador; o copia el texto para mandarlo por Discord.
 

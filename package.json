@@ -8,7 +8,8 @@
     "demo": "vite --mode demo",
     "build": "vite build",
     "preview": "vite preview",
-    "backup": "node scripts/backup.mjs"
+    "backup": "node scripts/backup.mjs",
+    "e2e": "node e2e/test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.2"
   }

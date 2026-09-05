@@ -29,6 +29,13 @@ npm run demo
 
 Modo demo: mismos flujos, pero los datos quedan en localStorage y se sincronizan entre pestañas del mismo navegador. Útil para ver la UI o probar cambios sin tocar la base.
 
+## Pruebas
+
+```bash
+npx playwright install chromium   # una sola vez
+npm run e2e                       # recorrido completo en escritorio y celular, con capturas en e2e/shots
+```
+
 ## Reportar problemas
 
 Al pie de la página hay "Reportar un problema": abre un issue en GitHub con la descripción y un diagnóstico (usuario, pestaña, versión, pantalla, navegador), o copia el texto para mandarlo por Discord.
