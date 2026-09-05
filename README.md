@@ -12,7 +12,7 @@ Dos tipos de post: **proyectos** (lo que un equipo puede entregar en tres días;
 
 ## Puesta en marcha (unos 15 minutos)
 
-1. **Supabase.** Creá un proyecto en supabase.com (plan gratuito). En *Authentication → Sign In / Providers → Email* desactivá *Confirm email*. En *SQL Editor* pegá el contenido de `supabase/schema.sql` y ejecutalo. En *Settings → API keys* copiá la *Project URL*, la *anon key* y una *secret key*.
+1. **Supabase.** Creá un proyecto en supabase.com (plan gratuito). En *Authentication → Sign In / Providers → Email* desactivá *Confirm email*. En *SQL Editor* pegá el contenido de `supabase/schema.sql` y ejecutalo (o, si cargás `SUPABASE_DB_URL` en `.env`, `npm run migrate` lo hace desde la terminal). En *Settings → API keys* copiá la *Project URL*, la *anon key* y una *secret key*.
 2. **Variables.** `cp .env.example .env` y completá las tres. La secret key es solo para los scripts de administración de tu máquina.
 3. **Código de invitación.** `npm run invite -- --nuevo` lo genera y lo guarda. Compartilo junto con el link.
 4. **Correr local.**
@@ -58,7 +58,10 @@ La anon key es pública por diseño; lo que protege los datos son las policies: 
 npm run invite                              # muestra el código de invitación
 npm run invite -- --nuevo                   # genera otro (los ya registrados no se ven afectados)
 npm run set-password -- <usuario> <clave>   # cambia una contraseña: no hay recuperación por mail
+npm run migrate                             # aplica supabase/schema.sql con psql; necesita SUPABASE_DB_URL
 ```
+
+`SUPABASE_DB_URL` es la connection string del botón *Connect* del panel, en modo *Session pooler* (puerto 5432), con la contraseña de la base. Si no la recordás, se resetea en *Settings → Database*. La secret key no alcanza para cambiar el esquema: solo da acceso a datos y usuarios.
 
 Los usuarios eligen un nombre de usuario; por dentro Supabase Auth usa `<usuario>@baiswarm.local`, así que no depende de mails ni de SMTP.
 
@@ -83,6 +86,7 @@ scripts/backup.mjs   backup y restore de la tabla desde la terminal
 scripts/check.mjs    chequeo de esquema, RLS, registro, escritura y realtime
 scripts/invite.mjs   código de invitación
 scripts/set-password.mjs  cambio de contraseña de un usuario
+scripts/migrate.mjs  aplica el esquema con psql
 e2e/test.mjs         recorrido automatizado con Playwright
 ```
 

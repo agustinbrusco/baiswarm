@@ -10,9 +10,9 @@ export function loadEnv() {
         .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }))
     : {};
   const env = { ...fromFile, ...process.env };
-  const url = env.VITE_SUPABASE_URL, key = env.VITE_SUPABASE_ANON_KEY, secret = env.SUPABASE_SECRET_KEY;
+  const url = env.VITE_SUPABASE_URL, key = env.VITE_SUPABASE_ANON_KEY, secret = env.SUPABASE_SECRET_KEY, dbUrl = env.SUPABASE_DB_URL;
   if (!url || !key) { console.error("Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (en .env o en el entorno)."); process.exit(1); }
-  return { url, key, secret };
+  return { url, key, secret, dbUrl };
 }
 
 // Cliente con la secret key: saltea RLS y puede administrar usuarios. Solo para scripts locales, nunca en el navegador.

@@ -36,7 +36,7 @@ Perfil (`role`) es texto libre con sugerencias (`PROFILE_HINTS`, un datalist); n
 - El trigger `posts_stamp` fija `author` y `author_id` al insertar y protege `author`, `author_id`, `t` y `kind` al editar.
 - Cliente: `storage.js` expone `auth` (signUp, signIn, signOut, current, onChange, updateRole) y mutaciones que devuelven el post actualizado. Realtime se suscribe después de tener sesión porque respeta RLS.
 - El modo demo (`npm run demo`) imita todo esto en localStorage; su código de invitación es `demo`.
-- La secret key vive solo en `.env` local para scripts de administración (`invite`, `set-password`, `backup`, `check`). Nunca en una variable `VITE_` ni en el repo.
+- La secret key vive solo en `.env` local para scripts de administración (`invite`, `set-password`, `backup`, `check`). Nunca en una variable `VITE_` ni en el repo. No sirve para DDL: para eso `npm run migrate` usa `SUPABASE_DB_URL` (connection string del Session pooler) con psql; sin ella, el SQL se pega en el SQL Editor.
 
 ## Decisiones tomadas
 - Realtime de Supabase con debounce de 300 ms que recarga todo, más polling cada 60 s por si realtime no llega.
