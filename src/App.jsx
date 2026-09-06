@@ -3,6 +3,7 @@ import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vo
 import { C, SERIF, SANS, FIELD, BORDER } from "./theme.js";
 import { PROFILE_HINTS, ProfileInput, AuthGate, Footer } from "./Auth.jsx";
 import Md, { MD_HINT } from "./Md.jsx";
+import { fold, score, cscore, alive, commentTree, postToMarkdown, slug, download } from "./export.js";
 
 // ── Identidad ───────────────────────────────────────────────────────────────
 const NAME = "BAISWARM";
@@ -24,13 +25,9 @@ const REL = {
 };
 
 const daysTo = (d) => Math.max(0, Math.ceil((new Date(d) - new Date()) / 86400000));
-const score = (p) => Object.values(p.votes).reduce((a, b) => a + b, 0);
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const when = (t) => new Date(t).toLocaleString("es-AR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
-const alive = (p) => p.comments.filter((c) => !c.deleted).length;
-const cscore = (c) => (c.deleted ? 0 : Object.keys(c.votes || {}).length); // votos de comentario: solo positivos
-const fold = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); // sin acentos ni mayúsculas, para buscar
 const PLURAL = { proyecto: ["proyecto", "proyectos"], insight: ["insight", "insights"] };
 const count = (n, kind) => `${n} ${PLURAL[kind][n === 1 ? 0 : 1]}`;
 
@@ -367,12 +364,7 @@ function CommentBox({ placeholder, onSend, autoFocus }) {
 // Hilo de comentarios: árbol por `parent`, renderizado plano con sangría por profundidad (tope visual de 4 niveles).
 function Comments({ post: p, me, act }) {
   const [replyTo, setReplyTo] = useState(null);
-  const byParent = useMemo(() => {
-    const o = {};
-    p.comments.forEach((c) => { const k = c.parent || "root"; (o[k] = o[k] || []).push(c); });
-    Object.values(o).forEach((xs) => xs.sort((a, b) => cscore(b) - cscore(a) || a.t - b.t));
-    return o;
-  }, [p.comments]);
+  const byParent = useMemo(() => commentTree(p.comments), [p.comments]);
   const render = (parent, depth) => (byParent[parent] || []).flatMap((c) => [
     <Comment key={c.id} c={c} depth={depth} me={me} replying={replyTo === c.id}
       onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
@@ -478,8 +470,10 @@ function PostCard({ post: p, me, byId, num, posts, rels, supports, orphan, open,
 
                 <Comments post={p} me={me} act={act} />
 
-                <div className="flex gap-2 mt-3 text-xs" style={{ color: C.muted }}>
+                <div className="flex flex-wrap gap-2 mt-3 text-xs" style={{ color: C.muted }}>
                   <button onClick={() => setLinking(!linking)} className="px-1 py-1" style={link}>{linking ? "Cerrar" : "Vincular"}</button>
+                  <button onClick={() => download(`baiswarm-${num[p.id]}-${slug(p.title)}.md`, postToMarkdown(p, { num, byId, rels, site: location.origin + location.pathname }))}
+                    className="px-1 py-1" style={link} title="Descargar el post con sus comentarios en markdown">Descargar .md</button>
                   {own && <button onClick={() => setEditing(true)} className="px-1 py-1" style={link}>Editar</button>}
                   {own && <button onClick={() => { if (window.confirm("¿Eliminar este post para todos?")) act.remove(p.id); }} className="px-1 py-1" style={{ ...link, color: C.down }}>Eliminar</button>}
                 </div>

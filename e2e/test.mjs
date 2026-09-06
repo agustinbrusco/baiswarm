@@ -6,7 +6,7 @@
 // equipos, sincronización entre pestañas y reporte; chequea overflow horizontal y contenedores
 // recortados; deja capturas en e2e/shots. Sale con código 1 si encontró problemas.
 import { chromium, devices } from "playwright";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
 import { loadEnv, emailFor } from "../scripts/env.mjs";
@@ -176,6 +176,17 @@ try {
   await d.locator(`${cvote}[aria-pressed="true"]`).click();
   await d.waitForTimeout(300);
   if (await d.locator(`${cvote}[aria-pressed="true"]`).count()) note("el voto en comentario no se quitó"); else ok("voto en comentario quitado");
+  // descarga del post en markdown, con vínculos, interesados y comentarios anidados como citas
+  { const [dl] = await Promise.all([d.waitForEvent("download"), d.getByRole("button", { name: "Descargar .md" }).click()]);
+    const name = dl.suggestedFilename(), md = readFileSync(await dl.path(), "utf8");
+    if (/^baiswarm-1-harness-de-deteccion-de-escape-en-evals\.md$/.test(name)) ok("descarga: nombre de archivo"); else note(`descarga: nombre ${name}`);
+    for (const [re, what] of [
+      [/^# Harness de detección de escape en evals\n/, "título"], [/Proyecto #1 · Contención · por agus/, "metadatos"], [/^> Detectar cuándo un agente/m, "pitch"],
+      [/\\sum_\{i=1\}/, "cuerpo con la fórmula"], [/## Vínculos\n\n- se apoya en #2: Los agentes usaron Artifactory/, "vínculos"], [/## Interesados\n\n- agus \(Interpretabilidad\)/, "interesados"],
+      [/## 2 comentarios/, "conteo de comentarios"], [/^\*\*agus\*\* · .*\n\n¿Qué señales concretas miraríamos\?/m, "comentario raíz"], [/^> \*\*agus\*\* · .*\n>\n> Conexiones salientes inesperadas, \*\*para empezar\*\*\./m, "respuesta como cita"],
+      [/Exportado de BAISWARM/, "pie"],
+    ]) if (re.test(md)) ok(`descarga: ${what}`); else note(`descarga: falta ${what}`);
+    if (/<[a-z]+>/.test(md)) note("descarga: quedó html"); }
   await must(d.locator(".katex-display"), "fórmula display en el proyecto");
   await must(d.getByText("2 comentarios"), "conteo de comentarios");
   await shot(d, "04-desktop-comentarios");

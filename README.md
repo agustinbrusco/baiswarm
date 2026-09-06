@@ -83,6 +83,7 @@ Usa la secret key de `.env`. Conviene correrlo una vez al día mientras el foro 
 src/App.jsx          feed, búsqueda, posts, comentarios, equipos, publicar, reporte
 src/Auth.jsx         entrada, registro, perfil y pie de sesión
 src/Md.jsx           markdown y fórmulas (KaTeX) en posts y comentarios
+src/export.js        descarga de un post con sus comentarios en markdown
 src/theme.js         paleta y tipografía
 src/storage.js       capa de datos: todo lo que habla con Supabase, y el modo demo
 supabase/schema.sql  tablas, policies, funciones y realtime; se puede correr más de una vez
