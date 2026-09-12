@@ -1,4 +1,4 @@
-// Identidad: sugerencias de perfil, campo de perfil, entrada / registro y pie con la sesión.
+// Identidad: sugerencias de perfil, campo de perfil, entrada / registro y pie con la sesión y los avisos.
 import { useState } from "react";
 import { auth, MIN_PASSWORD } from "./storage.js";
 import { C, SANS, BORDER } from "./theme.js";
@@ -61,13 +61,16 @@ export function AuthGate({ onDone }) {
   );
 }
 
-export function Footer({ me, onRole, onSignOut }) {
+// `notify`: estado y acciones de los avisos del navegador (useNotify). Sin API (iOS Safari) no se menciona.
+export function Footer({ me, onRole, onSignOut, notify }) {
   const [editing, setEditing] = useState(false);
   const [role, setRole] = useState(me.role);
+  const link = { textDecoration: "underline" };
   return (
     <div className="mt-10 text-xs leading-relaxed" style={{ fontFamily: SANS, color: C.muted }}>
       <p>
-        Participás como <b>{me.name}</b>{me.role ? ` · ${me.role}` : ""} · <button onClick={() => { setRole(me.role); setEditing(!editing); }} className="py-1" style={{ textDecoration: "underline" }}>cambiar perfil</button> · <button onClick={onSignOut} className="py-1" style={{ textDecoration: "underline" }}>salir</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
+        Participás como <b>{me.name}</b>{me.role ? ` · ${me.role}` : ""} · <button onClick={() => { setRole(me.role); setEditing(!editing); }} className="py-1" style={link}>cambiar perfil</button> · <button onClick={onSignOut} className="py-1" style={link}>salir</button>. Todo lo que publicás acá lo ve el resto del grupo. Los cambios de los demás aparecen solos.
+        {notify.state !== "no" && <> Avisos del navegador: {notify.state === "on" ? <>activados · <button onClick={notify.disable} className="py-1" style={link}>silenciar</button></> : notify.state === "blocked" ? "bloqueados en el navegador" : <button onClick={notify.enable} className="py-1" style={link}>activar</button>}.</>}
       </p>
       {editing && (
         <div className="flex flex-wrap gap-2 mt-2">

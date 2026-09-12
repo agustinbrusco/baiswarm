@@ -83,7 +83,9 @@ Usa la secret key de `.env`. Conviene correrlo una vez al día mientras el foro 
 src/App.jsx          feed, búsqueda, posts, comentarios, equipos, publicar, reporte
 src/Auth.jsx         entrada, registro, perfil y pie de sesión
 src/Md.jsx           markdown y fórmulas (KaTeX) en posts y comentarios
-src/export.js        descarga de un post con sus comentarios en markdown
+src/export.js        descarga de un post con sus comentarios en markdown, y el diff de novedades para los avisos
+src/notify.js        avisos del navegador: contador en el título y notificaciones con la pestaña en segundo plano
+public/sw.js         service worker mínimo, solo para mostrar avisos en Chrome de Android
 src/theme.js         paleta y tipografía
 src/storage.js       capa de datos: todo lo que habla con Supabase, y el modo demo
 supabase/schema.sql  tablas, policies, funciones y realtime; se puede correr más de una vez
@@ -98,6 +100,8 @@ e2e/test.mjs         recorrido automatizado con Playwright
 ```
 
 `storage.js` expone `auth` y las mutaciones (`vote`, `toggleInterest`, `addComment`, `removeComment`, `voteComment`, `addLink`, `removeLink`, `createPost`, `updatePost`, `deletePost`), que llaman a funciones de la base y devuelven el post actualizado. Además de realtime hay un polling cada 60 segundos como red de seguridad.
+
+Avisos: con la pestaña en segundo plano, el título cuenta las novedades de otros (comentarios en tus posts, respuestas a tus comentarios, gente que se suma a tu proyecto, posts nuevos) y, si activaste los avisos del navegador desde la línea del feed o el pie de página, llega una notificación por cada una; el clic abre el post. Funciona en escritorio y en Chrome de Android; iOS Safari no tiene la API. Con la pestaña cerrada no llega nada.
 
 ## Próximos pasos posibles
 

@@ -3,7 +3,8 @@ import { configured, demo, auth, loadAll, createPost, updatePost, deletePost, vo
 import { C, SERIF, SANS, FIELD, BORDER } from "./theme.js";
 import { PROFILE_HINTS, ProfileInput, AuthGate, Footer } from "./Auth.jsx";
 import Md, { MD_HINT } from "./Md.jsx";
-import { fold, score, cscore, alive, commentTree, postToMarkdown, slug, download } from "./export.js";
+import { fold, score, cscore, alive, commentTree, postToMarkdown, slug, download, changes } from "./export.js";
+import { useNotify } from "./notify.js";
 
 // ── Identidad ───────────────────────────────────────────────────────────────
 const NAME = "BAISWARM";
@@ -44,11 +45,19 @@ export default function App() {
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(null);
   const busy = useRef(false), again = useRef(false), scrollTo = useRef(null);
+  // para los avisos: la última lista conocida (null hasta la primera carga de la sesión), quién soy y cómo avisar
+  const known = useRef(null), meRef = useRef(null), pushRef = useRef(() => {});
+  meRef.current = me;
 
   const refresh = useCallback(async () => {
     if (busy.current) { again.current = true; return; } // llegó un cambio durante una recarga: repetir al terminar
     busy.current = true;
-    try { setPosts(await loadAll()); setErr(""); }
+    try {
+      const next = await loadAll();
+      if (known.current && meRef.current) pushRef.current(changes(known.current, next, meRef.current)); // novedades de otros
+      known.current = next;
+      setPosts(next); setErr("");
+    }
     catch (e) { setErr(e.message || "No pude leer el foro. Probá actualizar."); }
     finally { busy.current = false; setLoading(false); if (again.current) { again.current = false; refresh(); } }
   }, []);
@@ -62,8 +71,9 @@ export default function App() {
 
   // datos: solo con sesión (RLS), y realtime también, porque respeta RLS
   useEffect(() => {
-    if (!me) { setPosts([]); return; }
+    if (!me) { setPosts([]); known.current = null; return; }
     setLoading(true);
+    known.current = null; // la primera carga de la sesión no es novedad
     refresh();
     let t = null;
     const unsub = subscribe(() => { clearTimeout(t); t = setTimeout(refresh, 300); });
@@ -77,6 +87,11 @@ export default function App() {
     const el = document.getElementById(`post-${scrollTo.current}`);
     if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); scrollTo.current = null; }
   }, [open, tab, track]);
+
+  // las mutaciones locales (apply, publicar, borrar) también actualizan la lista conocida, sin pasar por refresh
+  useEffect(() => { if (known.current) known.current = posts; }, [posts]);
+  const notify = useNotify(NAME, (id) => act.jump(id));
+  pushRef.current = notify.push;
 
   const apply = (u) => setPosts((xs) => xs.map((p) => (p.id === u.id ? u : p)));
   const run = async (pr) => { try { await pr; setErr(""); return true; } catch (e) { setErr(e.message || "Algo falló, actualizá y probá de nuevo."); refresh(); return false; } };
@@ -177,6 +192,12 @@ export default function App() {
         {configured && !authReady && <p className="py-6 text-sm" style={{ fontFamily: SANS, color: C.muted }}>Cargando…</p>}
         {configured && authReady && !me && <AuthGate onDone={setMe} />}
         {err && <div className="mt-3 text-sm px-3 py-2 rounded" style={{ fontFamily: SANS, background: "#FBEEEC", color: C.down }}>{err}</div>}
+        {me && notify.state === "ask" && (
+          <p className="mt-3 text-xs leading-relaxed" style={{ fontFamily: SANS, color: C.muted }}>
+            El navegador puede avisarte cuando comenten tus posts, te respondan o alguien se sume a tu proyecto, aunque estés en otra pestaña.{" "}
+            <button onClick={notify.enable} className="py-1" style={{ textDecoration: "underline" }}>Activar</button> · <button onClick={notify.disable} className="py-1" style={{ textDecoration: "underline" }}>Ahora no</button>
+          </p>
+        )}
 
         {me && isFeed && (
           <>
@@ -228,7 +249,7 @@ export default function App() {
         {me && tab === "equipos" && <Teams posts={posts.filter((p) => p.kind === "proyecto")} onJump={act.jump} />}
         {me && tab === "nuevo" && <NewPost posts={posts} num={num} onSubmit={addPost} />}
 
-        {me && <Footer me={me} onRole={changeRole} onSignOut={signOut} />}
+        {me && <Footer me={me} onRole={changeRole} onSignOut={signOut} notify={notify} />}
         <Report me={me} tab={tab} err={err} />
       </div>
     </div>

@@ -77,11 +77,20 @@ async function login(page, name, pass) {
   await page.getByRole("button", { name: "Entrar" }).click();
 }
 const heading = (page, re) => page.getByRole("heading", { name: re });
+const askNotify = () => { if (typeof Notification !== "undefined") Object.defineProperty(Notification, "permission", { get: () => "default" }); };
+// espera a que una condición se cumpla (para cosas que no son un locator, como el título de la pestaña)
+async function eventually(fn, what, t = 8000) {
+  const end = Date.now() + t;
+  while (Date.now() < end) { try { if (await fn()) { ok(what); return true; } } catch {} await new Promise((r) => setTimeout(r, 200)); }
+  note(`no pasó: ${what}`); return false;
+}
 
 let d, m;
 try {
   // ── Escritorio ──
+  // headless siempre dice que las notificaciones están bloqueadas: se finge "sin decidir" para ver la línea de "Activar" del feed
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await dctx.addInitScript(askNotify);
   d = await dctx.newPage(); wire(d, "desktop");
   await d.goto(BASE);
   if (REAL) { if (await d.getByText("Modo demo").count()) note("apareció el banner de demo en modo real"); else ok("sin banner de demo"); }
@@ -210,18 +219,47 @@ try {
   await must(d.getByText("Interpretabilidad"), "perfil libre en equipos");
   await shot(d, "05-desktop-equipos");
 
-  // ── Segunda pestaña: sincronización ──
-  const d2 = await dctx.newPage(); wire(d2, "desktop-tab2"); await d2.goto(BASE);
+  // ── Segunda pestaña: sincronización y avisos ──
+  // simula estar en segundo plano (sin foco) y reemplaza la API de notificaciones por un stub que registra lo que se mostraría
+  const d2 = await dctx.newPage(); wire(d2, "desktop-tab2");
+  await d2.addInitScript(() => {
+    window.__notes = [];
+    window.Notification = class { constructor(t, o) { window.__notes.push({ title: t, ...o }); } close() {} static permission = "granted"; static requestPermission() { return Promise.resolve("granted"); } };
+    document.hasFocus = () => false;
+  });
+  await d2.goto(BASE);
   await must(heading(d2, /\(v2\)/), "pestaña 2 ve los datos");
+  await d2.getByRole("button", { name: "Activar", exact: true }).click();
+  await must(d2.getByText("Avisos del navegador: activados"), "avisos: activados desde la línea del feed");
+  if ((await d2.evaluate(() => window.__notes.length)) === 1) ok("avisos: notificación de confirmación"); else note("avisos: sin notificación de confirmación");
   await d.getByRole("button", { name: /Proyectos/ }).click();
   await d.getByPlaceholder("Comentar…").fill("prueba de sincronización"); await d.keyboard.press("Enter");
   await must(d2.getByText("2 comentarios"), "pestaña 2 recibió el cambio sin recargar", REAL ? 15000 : 8000);
+  if ((await d2.title()) === "BAISWARM") ok("avisos: lo propio no cuenta"); else note(`avisos: título "${await d2.title()}" tras un cambio propio`);
   // el comentario votado sube entre sus hermanos: "prueba de sincronización" (más nuevo) pasa adelante del hilo eliminado
   await d.locator(cvote).last().click();
   await heading(d2, /\(v2\)/).click();
   await must(d2.locator(`${cvote}[aria-pressed="true"]`), "pestaña 2 recibió el voto en comentario", REAL ? 15000 : 8000);
   { const ts = await d.locator(".md").allInnerTexts(); const i = ts.findIndex((t) => t.includes("prueba de sincronización")), j = ts.findIndex((t) => t.includes("Conexiones salientes"));
     if (i >= 0 && j >= 0 && i < j) ok("comentario votado sube entre hermanos"); else note(`orden de comentarios por votos: ${i} vs ${j}`); }
+  if (!REAL) {
+    // otro usuario comenta el proyecto de agus y responde a su comentario: se escribe en el storage del demo desde la pestaña 1,
+    // así el evento "storage" llega a la pestaña 2 como llegaría realtime
+    await d.evaluate(() => {
+      const k = "baiswarm:demo", xs = JSON.parse(localStorage.getItem(k)), p = xs.find((x) => /Harness/.test(x.title));
+      const mine = p.comments.find((c) => c.text === "prueba de sincronización");
+      p.comments.push({ id: "e2e-c1", uid: "demo-otro", who: "eitan", text: "Me interesa, ¿cómo arrancamos?", t: Date.now(), parent: null },
+        { id: "e2e-c2", uid: "demo-otro", who: "eitan", text: "Funciona.", t: Date.now() + 1, parent: mine.id });
+      localStorage.setItem(k, JSON.stringify(xs));
+    });
+    await eventually(async () => (await d2.title()) === "(2) BAISWARM", "avisos: el título cuenta las novedades en la pestaña sin foco");
+    const notes = await d2.evaluate(() => window.__notes.slice(1));
+    for (const [t, what] of [["eitan comentó tu proyecto", "comentario en post propio"], ["eitan te respondió", "respuesta a comentario propio"]])
+      if (notes.some((n) => n.title === t && /Harness/.test(n.body))) ok(`avisos: ${what}`); else note(`avisos: falta "${t}" en ${JSON.stringify(notes)}`);
+    await d2.evaluate(() => { document.hasFocus = () => true; window.dispatchEvent(new Event("focus")); });
+    await eventually(async () => (await d2.title()) === "BAISWARM", "avisos: el contador se limpia al volver a la pestaña");
+    await d2.evaluate(() => { document.hasFocus = () => false; });
+  }
 
   // ── Reporte ──
   await d.getByRole("button", { name: "Reportar un problema" }).click();
@@ -234,6 +272,7 @@ try {
   // ── Celular (iPhone 14), con los mismos datos ──
   const seed = await d.evaluate(() => localStorage.getItem("baiswarm:demo"));
   const mctx = await browser.newContext({ ...devices["iPhone 14"] });
+  await mctx.addInitScript(askNotify);
   if (!REAL) await mctx.addInitScript((v) => { if (!localStorage.getItem("baiswarm:demo")) localStorage.setItem("baiswarm:demo", v); }, seed);
   m = await mctx.newPage(); wire(m, "mobile");
   await m.goto(BASE);
@@ -245,7 +284,11 @@ try {
   await m.getByRole("button", { name: "Me sumaría" }).click();
   await must(m.getByText(new RegExp(`${B} \\(Policy`)), "mobile: sumado con perfil");
   await must(m.getByText("2 interesados"), "conteo de interesados");
-  if (REAL) await must(d.getByText("2 interesados"), "el escritorio vio por realtime lo que hizo el celular", 15000);
+  if (REAL) {
+    await must(d.getByText("2 interesados"), "el escritorio vio por realtime lo que hizo el celular", 15000);
+    await eventually(async () => (await d2.title()) === "(1) BAISWARM", "avisos: el título cuenta lo que llegó por realtime", 15000);
+    if (await d2.evaluate(() => window.__notes.some((n) => /se sumó a tu proyecto/.test(n.title)))) ok("avisos: notificación por realtime"); else note("avisos: no llegó la notificación por realtime");
+  }
   await noOverflow(m, "mobile proyecto abierto"); await shot(m, "08-mobile-proyecto");
   await m.getByRole("button", { name: "responder" }).first().click();
   await m.getByPlaceholder(/Responder a/).fill("Desde policy: qué obligaciones de reporte aplican."); await m.keyboard.press("Enter");

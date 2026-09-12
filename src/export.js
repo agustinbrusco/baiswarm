@@ -59,3 +59,26 @@ export function download(filename, text, type = "text/markdown;charset=utf-8") {
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Qué cambió entre dos lecturas del foro que le importe a `me`: posts nuevos de otros, comentarios de otros en sus posts,
+// respuestas a sus comentarios y gente que se sumó a sus proyectos. Lo propio no cuenta. `tag` identifica el evento.
+export function changes(prev, next, me) {
+  const was = Object.fromEntries(prev.map((p) => [p.id, p]));
+  const out = [];
+  next.forEach((p) => {
+    const o = was[p.id];
+    if (!o) { if (p.author_id !== me.id) out.push({ kind: "post", post: p, who: p.author, tag: `post:${p.id}` }); return; }
+    const mine = p.author_id === me.id;
+    const old = new Set(o.comments.map((c) => c.id)), byId = Object.fromEntries(p.comments.map((c) => [c.id, c]));
+    p.comments.forEach((c) => {
+      if (old.has(c.id) || c.deleted || c.uid === me.id) return;
+      if (c.parent && byId[c.parent]?.uid === me.id) out.push({ kind: "reply", post: p, who: c.who, tag: `c:${c.id}` });
+      else if (mine) out.push({ kind: "comment", post: p, who: c.who, tag: `c:${c.id}` });
+    });
+    if (mine) {
+      const had = new Set(o.interest.map((x) => x.id));
+      p.interest.forEach((x) => { if (!had.has(x.id) && x.id !== me.id) out.push({ kind: "interest", post: p, who: x.name, tag: `i:${p.id}:${x.id}` }); });
+    }
+  });
+  return out;
+}
